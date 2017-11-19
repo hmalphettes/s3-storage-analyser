@@ -2,5 +2,8 @@ language: python
 python:
   - "3.6"
 
-install: "pip install -r requirements-dev.txt"
-script: pytest -s
+install:
+  - pip install -r requirements-dev.txt
+  - pip install codecov pytest-cov
+
+script: pytest -s --cov=./
