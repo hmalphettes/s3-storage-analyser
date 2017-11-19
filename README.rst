@@ -1,3 +1,6 @@
+.. image:: https://travis-ci.org/hmalphettes/s3-storage-analyser.svg?branch=master
+    :target: https://travis-ci.org/hmalphettes/s3-storage-analyser
+
 S3 Storage Analyser - WIP
 =========================
 A command line tool to display the objects stored in your AWS S3 account.
