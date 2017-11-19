@@ -1,5 +1,7 @@
 .. image:: https://travis-ci.org/hmalphettes/s3-storage-analyser.svg?branch=master
     :target: https://travis-ci.org/hmalphettes/s3-storage-analyser
+.. image:: https://codecov.io/gh/hmalphettes/s3-storage-analyser/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/hmalphettes/s3-storage-analyser
 
 S3 Storage Analyser - WIP
 =========================
