@@ -19,8 +19,8 @@ Usage - Command Line
 --------------------
 ::
 
-    python s3_storage_analyser.py
-    python3 s3_storage_analyser.py --unit TB --prefix s3://hm
+    hugues in ~/proj/springcleaning/s3-storage-analyser on master*
+    ⚡ python s3_storage_analyser.py --unit TB --prefix s3://hm
     Name                  CreationDate               bucket_location      total_bytes    total_files  last_modified
     hm.many01             2017-11-18 08:13:58+00:00  ap-southeast-1             60000          10000  2017-11-18 08:37:59+00:00
     hm.many02             2017-11-18 08:14:14+00:00  ap-southeast-1             60000          10000  2017-11-18 08:50:51+00:00
