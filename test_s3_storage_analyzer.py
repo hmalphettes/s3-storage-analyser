@@ -18,22 +18,24 @@ def _setup_s3():
     client.create_bucket(Bucket='hm.samples')
     for i in range(0, 3):
         client.put_object(Bucket='hm.samples', Body=b'abcdef', Key=f'{i}.txt')
+    client.put_object(Bucket='hm.samples', Body=b'abcdef', Key='sub/4.txt')
 
 @mock_s3
 def test_traverse_bucket():
     """Traverse bucket. single internal call"""
     _setup_s3()
     bucket_descr = traverse_bucket('hm.samples')
-    assert bucket_descr['total_files'] == 3
-    assert bucket_descr['total_bytes'] == 18
+    assert bucket_descr['TotalFiles'] == 4
+    assert bucket_descr['TotalSize'] == 24
 
 @mock_s3
 def test_traverse_bucket_2():
     """Traverse bucket. multiple s3 calls as there are more resources than the max_keys"""
     _setup_s3()
     bucket_descr = traverse_bucket('hm.samples', max_keys=2)
-    assert bucket_descr['total_files'] == 3
-    assert bucket_descr['total_bytes'] == 18
+    assert bucket_descr['TotalFiles'] == 4
+    assert bucket_descr['TotalSize'] == 24
+    assert bucket_descr['StorageStats']['STANDARD']['TotalFiles'] == 4
 
 @mock_s3
 def test_bucket_xinfo():

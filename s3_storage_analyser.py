@@ -23,7 +23,7 @@ def parse_args():
 
     return parser.parse_args()
 
-UNIT_DEFS = {'KB':1024, 'MB':1024**2, 'GB':1024**3, 'TB':1024**4}
+UNIT_DEFS = {'B': 1, 'KB':1024, 'MB':1024**2, 'GB':1024**3, 'TB':1024**4}
 def convert_bytes(nbytes, unit='MB', append_unit=False):
     """Converts a number of bytes into a specific unit"""
     # Credit: https://stackoverflow.com/a/39284216/1273401
@@ -74,22 +74,36 @@ def _analyse_buckets(prefix=None):
 
 def traverse_bucket(bucket, prefix=None, max_keys=None):
     """Paginates through the objects in the bucket
-    keep track of the number of files
-    sum the size of each file"""
+    keep track of the number of files; sum the size of each file"""
     total_bytes = 0
     total_files = 0
     last_modified = pytz.utc.localize(datetime.min)
+    storage_type_stats = {}
+    for _type in ['STANDARD', 'REDUCED_REDUNDANCY', 'GLACIER']:
+        storage_type_stats[_type] = {
+            'TotalSize': 0,
+            'TotalFiles': 0
+        }
     kwargs = {'Bucket': bucket}
     if prefix is not None:
         kwargs['Prefix'] = prefix
     if max_keys is not None:
         kwargs['MaxKeys'] = max_keys
     for obj in _list_objects(**kwargs):
-        total_bytes += obj['Size']
-        total_files += 1
-        if obj['LastModified'] > last_modified:
-            last_modified = obj['LastModified']
-    return {'total_bytes': total_bytes, 'total_files': total_files, 'last_modified': last_modified}
+        if obj['Size'] != 0:
+            total_bytes += obj['Size']
+            total_files += 1
+            stats = storage_type_stats[obj['StorageClass']]
+            stats['TotalSize'] += obj['Size']
+            stats['TotalFiles'] += 1
+            if obj['LastModified'] > last_modified:
+                last_modified = obj['LastModified']
+    return {
+        'TotalSize': total_bytes,
+        'TotalFiles': total_files,
+        'LastModified': last_modified,
+        'StorageStats': storage_type_stats
+    }
 
 def _list_objects(**kwargs):
     """Generator to iterate the objects found in a bucket.
@@ -110,14 +124,35 @@ def _list_objects(**kwargs):
         for i in _list_objects(**kwargs):
             yield i
 
+def _format_bucket(bucket, args):
+    return [
+        bucket['Name'],
+        bucket['CreationDate'],
+        bucket['LastModified'],
+        convert_bytes(bucket['TotalSize'], args.unit),
+        bucket['TotalFiles']
+    ]
+
 def _format_buckets(buckets, args):
     """Format a list of buckets as dictionary into a list of arrays for tabulate"""
+    headers = [
+        'Name',
+        'Created',
+        'Last Modified',
+        f'Total size {args.unit}',
+        'Total files'
+    ]
+    return {
+        'headers': headers,
+        'values': [_format_bucket(b, args) for b in buckets]
+    }
 
 def main():
     """CLI entry point"""
     args = parse_args()
     buckets = _analyse_buckets(prefix=args.prefix)
-    print(tabulate.tabulate(buckets, headers='keys', tablefmt='plain'))
+    formatted = _format_buckets(buckets, args)
+    print(tabulate.tabulate(formatted['values'], headers=formatted['headers'], tablefmt='plain'))
 
 if __name__ == "__main__":
     main()
