@@ -4,9 +4,12 @@ Test indeed
 
 from pprint import pprint
 from datetime import datetime
+from io import StringIO
+import sys
+from contextlib import redirect_stdout
 from s3_storage_analyser import _get_s3_client, _list_buckets, _format_buckets
 from s3_storage_analyser import convert_bytes, traverse_bucket, fetch_bucket_info
-from s3_storage_analyser import report
+from s3_storage_analyser import main
 from moto import mock_s3
 
 def test_convert_bytes():
@@ -80,17 +83,49 @@ def test_format_buckets():
         'Name': 'hm.samples',
         'CreationDate': datetime.now(),
         'LastModified': datetime.now(),
-        'TotalSize': 1048576,
+        'TotalSize': 1048576, # 1MB
         'TotalFiles': 6
     }]
     formatted = _format_buckets(buckets)
-    pprint(formatted)
+    assert formatted['values'][0][0] == 'hm.samples'
+    assert formatted['values'][0][3] == '1' # 1MB
+
+def _call_main(args_str):
+    sio = StringIO()
+    with redirect_stdout(sio):
+        old_sys_argv = sys.argv
+        try:
+            sys.argv = args_str.split()
+            main()
+        finally:
+            sys.argv = old_sys_argv
+    return sio.getvalue()
 
 @mock_s3
-def test_report():
-    """Test the tabulated report"""
+def test_main():
+    """Test main call no prefix"""
     _setup_s3()
-    _report = report(unit='KB')
-    lines = _report.splitlines()
+    out = _call_main('s3_storage_analyser.py --unit KB')
+    lines = out.splitlines()
     assert ' Total size KB ' in lines[0]
     assert ' 0.02 ' in lines[1]
+
+@mock_s3
+def test_main_prefix():
+    """Test main call no prefix"""
+    _setup_s3()
+    out = _call_main('s3_storage_analyser.py --unit KB --prefix s3://hm.samples')
+    lines = out.splitlines()
+    assert ' Total size KB ' in lines[0]
+    assert ' 0.02 ' in lines[1]
+
+@mock_s3
+def test_main_wrong_prefix():
+    """Test main call no prefix"""
+    _setup_s3()
+    try:
+        _call_main('s3_storage_analyser.py --unit KB --prefix hm.samples')
+    except ValueError as err:
+        assert 'Invalid prefix' in err.__str__()
+        return
+    raise Exception('No ValueError was raised although the prefix was wrong')

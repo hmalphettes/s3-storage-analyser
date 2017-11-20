@@ -46,7 +46,7 @@ def _list_buckets(prefix=None):
         if _m is not None:
             buckets = filter(lambda x: x['Name'].startswith(_m.group(1)), buckets)
         else:
-            raise Exception(f'Invalid prefix "{prefix}"; expected "s3://bucket_name[/blah]"')
+            raise ValueError(f'Invalid prefix "{prefix}"; expected "s3://bucket_name[/blah]"')
     return sorted(buckets, key=itemgetter('Name'))
 
 def fetch_bucket_info(bucket):
