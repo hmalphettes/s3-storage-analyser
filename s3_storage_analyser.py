@@ -208,34 +208,35 @@ def report(prefix=None, unit='MB', tablefmt='plain', pool_size=None):
 
     aggregations = _compute_aggregations(buckets)
     aggregations_formatted = []
+
+    # prepare the values by region
     byregion = aggregations['byregion']
     aggregations_report = ''
-    if len(byregion.keys()) >= 1:
-        for region in byregion:
-            region_formatted = []
-            aggregations_formatted.append(region_formatted)
-            region_formatted.append(region)
-            values = byregion[region]
-            region_formatted.append(values['Buckets'])
-            region_formatted.append(convert_bytes(values['TotalSize'], unit))
-            region_formatted.append(values['TotalFiles'])
-            storage_values = values['StorageStats']
-            for storage_type in STORAGE_TYPES:
-                if not storage_type in storage_values:
-                    region_formatted.append(0)
-                    region_formatted.append(0)
-                else:
-                    storage_val = storage_values[storage_type]
-                    region_formatted.append(convert_bytes(storage_val['TotalSize'], unit))
-                    region_formatted.append(storage_val['TotalFiles'])
-        headers = ['Region', 'Buckets', f'Size {unit}', 'Files']
-        for storage_type in ['Std', 'RR', 'IA']:
-            headers.append(f'{storage_type} {unit}')
-            headers.append(f'{storage_type} Files')
-        aggregations_report = '\n\n' + tabulate.tabulate(
-            aggregations_formatted,
-            headers=headers,
-            tablefmt=tablefmt)
+    for region in byregion:
+        region_formatted = []
+        aggregations_formatted.append(region_formatted)
+        region_formatted.append(region)
+        values = byregion[region]
+        region_formatted.append(values['Buckets'])
+        region_formatted.append(convert_bytes(values['TotalSize'], unit))
+        region_formatted.append(values['TotalFiles'])
+        storage_values = values['StorageStats']
+        for storage_type in STORAGE_TYPES:
+            if not storage_type in storage_values:
+                region_formatted.append(0)
+                region_formatted.append(0)
+            else:
+                storage_val = storage_values[storage_type]
+                region_formatted.append(convert_bytes(storage_val['TotalSize'], unit))
+                region_formatted.append(storage_val['TotalFiles'])
+    headers = ['Region', 'Buckets', f'Size {unit}', 'Files']
+    for storage_type in ['Std', 'RR', 'IA']:
+        headers.append(f'{storage_type} {unit}')
+        headers.append(f'{storage_type} Files')
+    aggregations_report = '\n\n' + tabulate.tabulate(
+        aggregations_formatted,
+        headers=headers,
+        tablefmt=tablefmt)
 
     return f'{buckets_report}{aggregations_report}'
 
