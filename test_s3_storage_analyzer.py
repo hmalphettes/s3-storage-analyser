@@ -34,6 +34,14 @@ def test_traverse_bucket():
     assert bucket_descr['TotalSize'] == 24
 
 @mock_s3
+def test_traverse_bucket_prefix():
+    """Traverse bucket. prefix to select a single file"""
+    _setup_s3()
+    bucket_descr = traverse_bucket('hm.samples', prefix='s3://hm.samples/1.txt')
+    assert bucket_descr['TotalFiles'] == 1
+    assert bucket_descr['TotalSize'] == 6
+
+@mock_s3
 def test_traverse_bucket_2():
     """Traverse bucket. multiple s3 calls as there are more resources than the max_keys"""
     _setup_s3()

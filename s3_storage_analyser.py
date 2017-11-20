@@ -20,7 +20,6 @@ def parse_args():
                         help='file size unit B|KB|MB|GB|TB', default='MB')
     parser.add_argument('--prefix', help='Filter the keys by prefix')
     parser.add_argument('--pool-size', help='Number of parallel workers')
-
     return parser.parse_args()
 
 UNIT_DEFS = {'B': 1, 'KB':1024, 'MB':1024**2, 'GB':1024**3, 'TB':1024**4}
@@ -56,21 +55,43 @@ def fetch_bucket_info(bucket):
     bucket.update({'bucket_location': bucket_location})
     return bucket
 
-def _analyse_bucket(bucket, prefix=None):
+# def _analyse_bucket2(bucket_and_prefix):
+#     return _analyse_bucket(bucket_and_prefix[0], prefix=bucket_and_prefix[1])
+
+def _analyse_bucket(bucket, prefix=None, pool_size=None):
     bucket = fetch_bucket_info(bucket)
+    if '_prefix' in bucket:
+        # The prefix was passed to the bucket object to survive multiprocessing
+        # TODO: find a cleaner way so that prefix is not None
+        prefix = bucket.pop('_prefix')
     stats = traverse_bucket(bucket['Name'], prefix=prefix)
     bucket.update(stats)
     return bucket
 
-def _analyse_buckets(prefix=None):
+def _analyse_buckets(prefix=None, pool_size=None):
     """Traverse all the buckets and collect the info"""
     buckets = _list_buckets(prefix=prefix)
-    pool = multi.Pool(multi.cpu_count())
+    # Pass the prefix arguments to the workers.
+    # TODO: find a cleaner way.
+    for bucket in buckets:
+        bucket['_prefix'] = prefix
+
+    if pool_size is None:
+        # TODO: should we use more workers than we have cpus?
+        pool_size = multi.cpu_count()
+    pool = multi.Pool(pool_size)
 
     buckets = list(pool.map(_analyse_bucket, buckets))
 
     pool.close()
     return buckets
+
+def _extract_prefix_arg(prefix):
+    """Extract Prefix within a bucket from s3://bucket_name/prefix"""
+    if prefix is None:
+        return
+    _m = re.match(r'^s3://[^\/]+/(.+)$', prefix)
+    return None if _m is None else _m.group(1)
 
 def traverse_bucket(bucket, prefix=None, max_keys=None):
     """Paginates through the objects in the bucket
@@ -79,6 +100,7 @@ def traverse_bucket(bucket, prefix=None, max_keys=None):
     total_files = 0
     last_modified = pytz.utc.localize(datetime.min)
     storage_type_stats = {}
+    prefix = _extract_prefix_arg(prefix)
     for _type in ['STANDARD', 'REDUCED_REDUNDANCY', 'GLACIER']:
         storage_type_stats[_type] = {
             'TotalSize': 0,
@@ -148,9 +170,9 @@ def _format_buckets(buckets, unit='MB'):
         'values': [_format_bucket(b, unit=unit) for b in buckets]
     }
 
-def report(prefix=None, unit='MB', tablefmt='plain'):
+def report(prefix=None, unit='MB', tablefmt='plain', pool_size=None):
     """Generate the tabulated report"""
-    buckets = _analyse_buckets(prefix=prefix)
+    buckets = _analyse_buckets(prefix=prefix, pool_size=pool_size)
     formatted = _format_buckets(buckets, unit=unit)
     return tabulate.tabulate(
         formatted['values'],
@@ -160,7 +182,7 @@ def report(prefix=None, unit='MB', tablefmt='plain'):
 def main():
     """CLI entry point"""
     args = parse_args()
-    print(report(prefix=args.prefix, unit=args.unit))
+    print(report(prefix=args.prefix, unit=args.unit, pool_size=args.pool_size))
 
 if __name__ == "__main__":
     main()
