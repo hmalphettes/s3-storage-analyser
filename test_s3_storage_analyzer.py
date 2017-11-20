@@ -3,8 +3,10 @@ Test indeed
 """
 
 from pprint import pprint
-from s3_storage_analyser import _get_s3_client, _list_buckets
+from datetime import datetime
+from s3_storage_analyser import _get_s3_client, _list_buckets, _format_buckets
 from s3_storage_analyser import convert_bytes, traverse_bucket, fetch_bucket_info
+from s3_storage_analyser import report
 from moto import mock_s3
 
 def test_convert_bytes():
@@ -71,3 +73,24 @@ def test_buckets_filter():
 
     bucket_list = _list_buckets(prefix='s3://a')
     assert len(bucket_list) == 2
+
+def test_format_buckets():
+    """Format and tabulate the buckets"""
+    buckets = [{
+        'Name': 'hm.samples',
+        'CreationDate': datetime.now(),
+        'LastModified': datetime.now(),
+        'TotalSize': 1048576,
+        'TotalFiles': 6
+    }]
+    formatted = _format_buckets(buckets)
+    pprint(formatted)
+
+@mock_s3
+def test_report():
+    """Test the tabulated report"""
+    _setup_s3()
+    _report = report(unit='KB')
+    lines = _report.splitlines()
+    assert ' Total size KB ' in lines[0]
+    assert ' 0.02 ' in lines[1]

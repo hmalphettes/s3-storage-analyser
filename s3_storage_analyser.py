@@ -124,35 +124,43 @@ def _list_objects(**kwargs):
         for i in _list_objects(**kwargs):
             yield i
 
-def _format_bucket(bucket, args):
+def _format_bucket(bucket, unit='MB'):
     return [
         bucket['Name'],
-        bucket['CreationDate'],
-        bucket['LastModified'],
-        convert_bytes(bucket['TotalSize'], args.unit),
+        bucket['CreationDate'].isoformat('T', 'seconds'),
+        bucket['LastModified'].isoformat('T', 'seconds'),
+        convert_bytes(bucket['TotalSize'], unit),
         bucket['TotalFiles']
     ]
 
-def _format_buckets(buckets, args):
-    """Format a list of buckets as dictionary into a list of arrays for tabulate"""
+def _format_buckets(buckets, unit='MB'):
+    """Format a list of buckets as dictionary into a list of arrays
+    ready to be tabulated"""
     headers = [
         'Name',
         'Created',
         'Last Modified',
-        f'Total size {args.unit}',
+        f'Total size {unit}',
         'Total files'
     ]
     return {
         'headers': headers,
-        'values': [_format_bucket(b, args) for b in buckets]
+        'values': [_format_bucket(b, unit=unit) for b in buckets]
     }
+
+def report(prefix=None, unit='MB', tablefmt='plain'):
+    """Generate the tabulated report"""
+    buckets = _analyse_buckets(prefix=prefix)
+    formatted = _format_buckets(buckets, unit=unit)
+    return tabulate.tabulate(
+        formatted['values'],
+        headers=formatted['headers'],
+        tablefmt=tablefmt)
 
 def main():
     """CLI entry point"""
     args = parse_args()
-    buckets = _analyse_buckets(prefix=args.prefix)
-    formatted = _format_buckets(buckets, args)
-    print(tabulate.tabulate(formatted['values'], headers=formatted['headers'], tablefmt='plain'))
+    print(report(prefix=args.prefix, unit=args.unit))
 
 if __name__ == "__main__":
     main()
