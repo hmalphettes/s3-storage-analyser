@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument('--pool-size', help='Number of parallel workers')
     return parser.parse_args()
 
+STORAGE_TYPES = ['STANDARD', 'REDUCED_REDUNDANCY', 'GLACIER']
 UNIT_DEFS = {'B': 1, 'KB':1024, 'MB':1024**2, 'GB':1024**3, 'TB':1024**4}
 def convert_bytes(nbytes, unit='MB', append_unit=False):
     """Converts a number of bytes into a specific unit"""
@@ -50,7 +51,7 @@ def fetch_bucket_info(bucket):
     """Fetches some extra info about the bucket {'Name':bucket_name}"""
     name = bucket['Name']
     bucket_location = _get_s3_client().get_bucket_location(Bucket=name)['LocationConstraint']
-    bucket.update({'bucket_location': bucket_location})
+    bucket.update({'Region': bucket_location})
     return bucket
 
 def _analyse_bucket(bucket):
@@ -58,6 +59,7 @@ def _analyse_bucket(bucket):
     # The prefix was passed to the bucket object to survive multiprocessing
     # TODO: find a cleaner way so that prefix is not None
     prefix = bucket.pop('_prefix')
+    fetch_bucket_info(bucket)
     stats = traverse_bucket(bucket['Name'], prefix=prefix)
     bucket.update(stats)
     return bucket
@@ -95,7 +97,7 @@ def traverse_bucket(bucket, prefix=None, max_keys=None):
     last_modified = pytz.utc.localize(datetime.min)
     storage_type_stats = {}
     prefix = _extract_prefix_arg(prefix)
-    for _type in ['STANDARD', 'REDUCED_REDUNDANCY', 'GLACIER']:
+    for _type in STORAGE_TYPES:
         storage_type_stats[_type] = {
             'TotalSize': 0,
             'TotalFiles': 0
@@ -140,9 +142,39 @@ def _list_objects(**kwargs):
         for i in _list_objects(**kwargs):
             yield i
 
+def _compute_aggregations(buckets):
+    bystorage = {}
+    byregion = {}
+    for bucket in buckets:
+        region = bucket['Region']
+        if region not in byregion:
+            byregion[region] = {
+                'TotalSize': 0, 'TotalFiles':0,
+                'Buckets': 0, 'StorageStats': {}}
+        stats = byregion[region]
+        stats['Buckets'] += 1
+        stats['TotalSize'] += bucket['TotalSize']
+        stats['TotalFiles'] += bucket['TotalFiles']
+        for storage_type in STORAGE_TYPES:
+            bucket_stats = bucket['StorageStats']
+            if not storage_type in bucket_stats or bucket_stats[storage_type]['TotalFiles'] == 0:
+                continue
+            storage_stats = stats['StorageStats']
+            if not storage_type in storage_stats:
+                storage_stats[storage_type] = {'TotalSize': 0, 'TotalFiles':0}
+            storage_stats[storage_type]['TotalSize'] += bucket_stats[storage_type]['TotalSize']
+            storage_stats[storage_type]['TotalFiles'] += bucket_stats[storage_type]['TotalFiles']
+            if not storage_type in bystorage:
+                bystorage[storage_type] = {'TotalSize': 0, 'TotalFiles':0}
+            storage_stats = bystorage[storage_type]
+            storage_stats['TotalSize'] += bucket_stats[storage_type]['TotalSize']
+            storage_stats['TotalFiles'] += bucket_stats[storage_type]['TotalFiles']
+    return {'bystorage': bystorage, 'byregion': byregion}
+
 def _format_bucket(bucket, unit='MB'):
     return [
         bucket['Name'],
+        bucket['Region'],
         bucket['CreationDate'].isoformat('T', 'seconds'),
         bucket['LastModified'].isoformat('T', 'seconds'),
         convert_bytes(bucket['TotalSize'], unit),
@@ -153,11 +185,12 @@ def _format_buckets(buckets, unit='MB'):
     """Format a list of buckets as dictionary into a list of arrays
     ready to be tabulated"""
     headers = [
-        'Name',
+        'Bucket',
+        'Region',
         'Created',
         'Last Modified',
-        f'Total size {unit}',
-        'Total files'
+        f'Size {unit}',
+        'Files'
     ]
     return {
         'headers': headers,
@@ -168,10 +201,43 @@ def report(prefix=None, unit='MB', tablefmt='plain', pool_size=None):
     """Generate the tabulated report"""
     buckets = _analyse_buckets(prefix=prefix, pool_size=pool_size)
     formatted = _format_buckets(buckets, unit=unit)
-    return tabulate.tabulate(
+    buckets_report = tabulate.tabulate(
         formatted['values'],
         headers=formatted['headers'],
         tablefmt=tablefmt)
+
+    aggregations = _compute_aggregations(buckets)
+    aggregations_formatted = []
+    byregion = aggregations['byregion']
+    aggregations_report = ''
+    if len(byregion.keys()) >= 1:
+        for region in byregion:
+            region_formatted = []
+            aggregations_formatted.append(region_formatted)
+            region_formatted.append(region)
+            values = byregion[region]
+            region_formatted.append(values['Buckets'])
+            region_formatted.append(convert_bytes(values['TotalSize'], unit))
+            region_formatted.append(values['TotalFiles'])
+            storage_values = values['StorageStats']
+            for storage_type in STORAGE_TYPES:
+                if not storage_type in storage_values:
+                    region_formatted.append(0)
+                    region_formatted.append(0)
+                else:
+                    storage_val = storage_values[storage_type]
+                    region_formatted.append(convert_bytes(storage_val['TotalSize'], unit))
+                    region_formatted.append(storage_val['TotalFiles'])
+        headers = ['Region', 'Buckets', f'Size {unit}', 'Files']
+        for storage_type in ['Std', 'RR', 'IA']:
+            headers.append(f'{storage_type} {unit}')
+            headers.append(f'{storage_type} Files')
+        aggregations_report = '\n\n' + tabulate.tabulate(
+            aggregations_formatted,
+            headers=headers,
+            tablefmt=tablefmt)
+
+    return f'{buckets_report}{aggregations_report}'
 
 def main():
     """CLI entry point"""

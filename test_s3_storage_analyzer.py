@@ -69,7 +69,7 @@ def test_bucket_xinfo():
         }
     )
     bucket_info = fetch_bucket_info({'Name':'hm.samples.encrypted'})
-    assert bucket_info['bucket_location'] == 'us-east-1'
+    assert bucket_info['Region'] == 'us-east-1'
 
 @mock_s3
 def test_buckets_filter():
@@ -89,6 +89,7 @@ def test_format_buckets():
     """Format and tabulate the buckets"""
     buckets = [{
         'Name': 'hm.samples',
+        'Region': 'us-east-1',
         'CreationDate': datetime.now(),
         'LastModified': datetime.now(),
         'TotalSize': 1048576, # 1MB
@@ -96,7 +97,7 @@ def test_format_buckets():
     }]
     formatted = _format_buckets(buckets)
     assert formatted['values'][0][0] == 'hm.samples'
-    assert formatted['values'][0][3] == '1' # 1MB
+    assert formatted['values'][0][4] == '1' # 1MB
 
 def _call_main(args_str):
     sio = StringIO()
@@ -115,7 +116,7 @@ def test_main():
     _setup_s3()
     out = _call_main('s3_storage_analyser.py --unit KB')
     lines = out.splitlines()
-    assert ' Total size KB ' in lines[0]
+    assert ' Size KB ' in lines[0]
     assert ' 0.02 ' in lines[1]
 
 @mock_s3
@@ -124,7 +125,7 @@ def test_main_prefix():
     _setup_s3()
     out = _call_main('s3_storage_analyser.py --unit KB --prefix s3://hm.samples')
     lines = out.splitlines()
-    assert ' Total size KB ' in lines[0]
+    assert ' Size KB ' in lines[0]
     assert ' 0.02 ' in lines[1]
 
 @mock_s3
