@@ -37,8 +37,6 @@ def _list_buckets(prefix=None):
     """Return the list of buckets {'Name','CreationDate'} """
     client = _get_s3_client()
     resp = client.list_buckets(prefix=prefix)
-    if not 'Buckets' in resp:
-        return []
     buckets = resp['Buckets']
     if prefix is not None:
         _m = re.match(r'^s3://([^\/]+).*$', prefix)
@@ -55,15 +53,11 @@ def fetch_bucket_info(bucket):
     bucket.update({'bucket_location': bucket_location})
     return bucket
 
-# def _analyse_bucket2(bucket_and_prefix):
-#     return _analyse_bucket(bucket_and_prefix[0], prefix=bucket_and_prefix[1])
-
-def _analyse_bucket(bucket, prefix=None, pool_size=None):
+def _analyse_bucket(bucket):
     bucket = fetch_bucket_info(bucket)
-    if '_prefix' in bucket:
-        # The prefix was passed to the bucket object to survive multiprocessing
-        # TODO: find a cleaner way so that prefix is not None
-        prefix = bucket.pop('_prefix')
+    # The prefix was passed to the bucket object to survive multiprocessing
+    # TODO: find a cleaner way so that prefix is not None
+    prefix = bucket.pop('_prefix')
     stats = traverse_bucket(bucket['Name'], prefix=prefix)
     bucket.update(stats)
     return bucket
