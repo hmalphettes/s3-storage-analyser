@@ -5,5 +5,6 @@ RUN pip install --requirement /tmp/requirements.txt && \
     pip install pytz s3cmd
 COPY *.py /app/
 WORKDIR /app
+USER nobody
 ENTRYPOINT [ "python3", "/app/s3_storage_analyser.py" ]
 CMD [ "--help" ]

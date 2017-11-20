@@ -39,6 +39,11 @@ Usage - Command Line
     ap-southeast-1          6       5.67    42006      5.67        42006        0           0        0           0
     eu-west-1               1       0.13        2      0.13            2        0           0        0           0
 
+Usage - Docker
+--------------
+::
+    docker run -e AWS_ACCESS_KEY_ID=123 -e AWS_SECRET_ACCESS_KEY=456 hmalphettes/s3_storage_analyser --unit KB
+
 License
 -------
 Public domain.
