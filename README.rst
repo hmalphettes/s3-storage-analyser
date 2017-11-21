@@ -71,7 +71,7 @@ The corresponding docker image that was built is pulled and a the tool is run ag
 
 The run logs are sent as a notification to a slack channel:
 
-.. image:: ./blob/master/onbuild-notification.jpg
+.. image:: https://github.com/hmalphettes/s3-storage-analyser/raw/master/onbuild-notification.jpg
 
 The setup of such an infra is currently not automated. Some documentation here: https://github.com/hmalphettes/s3-storage-analyser/tree/master/integration
 
