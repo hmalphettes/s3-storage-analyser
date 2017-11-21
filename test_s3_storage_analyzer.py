@@ -7,7 +7,7 @@ from datetime import datetime
 from io import StringIO
 import sys
 from contextlib import redirect_stdout
-from s3_storage_analyser import _get_s3_client, _list_buckets, _format_buckets
+from s3_storage_analyser import _get_s3_client, _list_buckets, _format_buckets, _analyse_bucket
 from s3_storage_analyser import convert_bytes, traverse_bucket, fetch_bucket_info
 from s3_storage_analyser import main
 from moto import mock_s3
@@ -29,7 +29,7 @@ def _setup_s3():
 def test_traverse_bucket():
     """Traverse bucket. single internal call"""
     _setup_s3()
-    bucket_descr = traverse_bucket('hm.samples')
+    bucket_descr = _analyse_bucket({'Name': 'hm.samples', '_prefix': None})
     assert bucket_descr['TotalFiles'] == 4
     assert bucket_descr['TotalSize'] == 24
 
