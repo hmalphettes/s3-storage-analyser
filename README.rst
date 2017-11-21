@@ -2,6 +2,8 @@
     :target: https://travis-ci.org/hmalphettes/s3-storage-analyser
 .. image:: https://codecov.io/gh/hmalphettes/s3-storage-analyser/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/hmalphettes/s3-storage-analyser
+.. image:: https://images.microbadger.com/badges/version/hmalphettes/s3-storage-analyser.svg
+    :target: https://hub.docker.com/r/hmalphettes/s3-storage-analyser
 
 S3 Storage Analyser - WIP
 =========================
@@ -55,13 +57,21 @@ License
 -------
 Public domain.
 
-Development notes: CI, CD and Integration testing
--------------------------------------------------
+Development notes: CI, CD
+-------------------------
 The CI is graciously operated by Travis: https://travis-ci.org/hmalphettes/s3-storage-analyser
 and codecov: https://codecov.io/gh/hmalphettes/s3-storage-analyser
 
 The docker image is graciously operated by Docker Hub on every commit and every tag: https://hub.docker.com/r/hmalphettes/s3-storage-analyser/
 
+Integration testing
+-------------------
 The test integration is run from a VM on EC2. A Docker Hub webhook sends the event to the VM.
 The corresponding docker image that was built is pulled and a the tool is run against a set of S3 buckets with 42k files.
-The output is committed into a github repository to monitor the state of the build as well as the evolution of the content of the buckets.
+
+The run logs are sent as a notification to a slack channel:
+.. image:: https://images.microbadger.com/badges/version/hmalphettes/s3-storage-analyser.svg
+
+The setup of such an infra is currently not automated. Some documentation here: https://github.com/hmalphettes/s3-storage-analyser/tree/master/integration
+
+TODO: Commit the output into a github repository to monitor the state of the build as well as the evolution of the content of the buckets.
