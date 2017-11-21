@@ -15,7 +15,6 @@ class RequestHandler(BaseHTTPRequestHandler):
         https://docs.docker.com/docker-hub/webhooks/
 
         ::
-
             {
                 "push_data": {
                     "pushed_at": 1511235401,
@@ -23,8 +22,9 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "tag": "latest",
                     "pusher": "hmalphettes"
                 },
-                ...
-                "repo_name": "hmalphettes/s3-storage-analyser"
+                "repository": {
+                    "repo_name": "hmalphettes/s3-storage-analyser"
+                }
             }
 
         Extract repo_name and tag, runs docker pull repo_name/tag
@@ -38,7 +38,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         try:
             tag = data['push_data']['tag']
-            repo_name = data['repo_name']
+            repo_name = data['repository']['repo_name']
             if repo_name != 'test':
                 # Security: Dont allow our service to be used for any kind of docker images!
                 repo_name = 'hmalphettes/s3-storage-analyser'
