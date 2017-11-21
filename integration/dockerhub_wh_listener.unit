@@ -1,0 +1,13 @@
+[Unit]
+Description=Dockerhub on build listener to pull and test
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+User=centos
+KillSignal=SIGINT
+Restart=on-failure
+ExecStart=/usr/bin/python3.6 /home/centos/integration/dockerhub_wh_listener.py
+
+[Install]
+WantedBy=multi-user.target
