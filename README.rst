@@ -70,7 +70,8 @@ The test integration is run from a VM on EC2. A Docker Hub webhook sends the eve
 The corresponding docker image that was built is pulled and a the tool is run against a set of S3 buckets with 42k files.
 
 The run logs are sent as a notification to a slack channel:
-.. image:: https://images.microbadger.com/badges/version/hmalphettes/s3-storage-analyser.svg
+
+.. image:: ./blob/master/onbuild-notification.jpg
 
 The setup of such an infra is currently not automated. Some documentation here: https://github.com/hmalphettes/s3-storage-analyser/tree/master/integration
 
