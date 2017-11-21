@@ -36,10 +36,18 @@ sudo systemctl start dockerhub_wh
 ```
 
 Create an onbuild.sh exeutable bash script.
-We setup a Slack hook to post notification to a channel.
+Setup a Slack hook to post notification to a channel.
 The value of that secret is stored on the server in the file `.env` as that environment variable `SLACK_URL`
+
 For example:
 ```
 # /home/centos/integration/.env
 SLACK_URL="https://hooks.slack.com/services/123secret
+```
+
+Optional: setup HAProxy
+-----------------------
+```
+# on centos-7 SELinux is preventing haproxy to connect to the backends:
+sudo setsebool -P haproxy_connect_any on
 ```

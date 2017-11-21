@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# slck notifications
+# Send notifications to a slack channel
 notify() {
   if [ -z "$SLACK_URL" ]; then
     local d; d="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -22,7 +22,18 @@ elif [ -n "$2" ]; then
     # and we certainly dont want to let any image have a run on our server.
     pull_stdout=$(docker pull "hmalphettes/s3-storage-analyser:$2")
     if res2=$(docker run --rm --net host "hmalphettes/s3-storage-analyser:$2" --unit KB --pool-size 8 --prefix 's3://hm.samples'); then
-      notify "Pulling: hmalphettes/s3-storage-analyser:$2 and Integration test:"'```'"$pull_stdout""$res2"'```'
+      codeblock='```'
+      notify "Integration test of hmalphettes/s3-storage-analyser:
+$codeblock
+docker pull hmalphettes/s3-storage-analyser:$2
+$pull_stdout
+$codeblock
+
+Integration test:
+$codeblock
+$res2
+$codeblock
+"
     else
       notify 'Integration test failed. Please ssh in the server and run "journalctl -xfeu dockerhub_wh"'
     fi
