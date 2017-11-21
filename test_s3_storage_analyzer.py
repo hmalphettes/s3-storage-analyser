@@ -123,7 +123,7 @@ def test_main():
 def test_main_prefix():
     """Test main call no prefix"""
     _setup_s3()
-    out = _call_main('s3_storage_analyser.py --unit KB --prefix s3://hm.samples')
+    out = _call_main('s3_storage_analyser.py --unit KB --prefix s3://hm.samples --pool-size 4')
     lines = out.splitlines()
     assert ' Size KB ' in lines[0]
     assert ' 0.02 ' in lines[1]

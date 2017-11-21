@@ -42,7 +42,8 @@ Usage - Command Line
 Usage - Docker
 --------------
 ::
-    docker run -e AWS_ACCESS_KEY_ID=123 -e AWS_SECRET_ACCESS_KEY=456 hmalphettes/s3_storage_analyser --unit KB
+
+    docker run -e AWS_ACCESS_KEY_ID=123 -e AWS_SECRET_ACCESS_KEY=456 hmalphettes/s3-storage-analyser --unit KB
 
 License
 -------

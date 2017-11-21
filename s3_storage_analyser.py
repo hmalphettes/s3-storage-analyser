@@ -19,7 +19,7 @@ def parse_args():
                         choices=['B', 'KB', 'MB', 'GB', 'TB'],
                         help='file size unit B|KB|MB|GB|TB', default='MB')
     parser.add_argument('--prefix', help='Filter the keys by prefix')
-    parser.add_argument('--pool-size', help='Number of parallel workers')
+    parser.add_argument('--pool-size', type=int, help='Number of parallel workers')
     return parser.parse_args()
 
 STORAGE_TYPES = ['STANDARD', 'REDUCED_REDUNDANCY', 'GLACIER']
