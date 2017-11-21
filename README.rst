@@ -43,8 +43,25 @@ Usage - Docker
 --------------
 ::
 
-    docker run -e AWS_ACCESS_KEY_ID=123 -e AWS_SECRET_ACCESS_KEY=456 hmalphettes/s3-storage-analyser --unit KB
+    docker run --rm hmalphettes/s3-storage-analyser --unit KB
+
+Note: if the machine where Docker is running is not configured with an appropriate IAM role to access S3, you can resort to pass the AWS credentials as environment variables:
+
+::
+
+    docker run -e AWS_ACCESS_KEY_ID=123 -e AWS_SECRET_ACCESS_KEY=456 --rm hmalphettes/s3-storage-analyser --unit KB
 
 License
 -------
 Public domain.
+
+Development notes: CI, CD and Integration testing
+-------------------------------------------------
+The CI is graciously operated by Travis: https://travis-ci.org/hmalphettes/s3-storage-analyser
+and codecov: https://codecov.io/gh/hmalphettes/s3-storage-analyser
+
+The docker image is graciously operated by Docker Hub on every commit and every tag: https://hub.docker.com/r/hmalphettes/s3-storage-analyser/
+
+The test integration is run from a VM on EC2. A Docker Hub webhook sends the event to the VM.
+The corresponding docker image that was built is pulled and a the tool is run against a set of S3 buckets with 42k files.
+The output is committed into a github repository to monitor the state of the build as well as the evolution of the content of the buckets.
