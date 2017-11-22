@@ -11,6 +11,22 @@ Requirements
 
 Optional: a slack channel setup for notifications.
 
+Quick cloud-init / User Data for Centos-7:
+```
+#cloud-config
+locale: en_US.UTF-8
+timezone: UTC
+packages:
+  - vim
+runcmd:
+  - yum install -y epel-release yum-utils
+  - yum install -y device-mapper-persistent-data lvm2 s3cmd
+  - yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+  - yum install -y docker-ce
+  - systemctl start docker
+  - usermod -aG docker centos
+```
+
 Install
 -------
 Setup a systemd daemon to run the python server that listens to docker hub's webhook:

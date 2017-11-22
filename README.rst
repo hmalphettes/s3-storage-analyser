@@ -41,6 +41,18 @@ Usage - Command Line
     ap-southeast-1          6       5.67    42006      5.67        42006        0           0        0           0
     eu-west-1               1       0.13        2      0.13            2        0           0        0           0
 
+Note that currently only the buckets owned by the AWS account configured can be analysed.
+
+Performance
+-----------
+The requests to S3 are parallelised for each bucket up to the number of workers in the pool.
+That number is defined by the parameter `--pool-size`.
+
+It defaults to the number of CPUs available on the machine.
+
+Even on a AWS t2.micro instance which uses a single CPU, a pool of 6 workers is reasonable.
+On the samples on my bucket, executing with 6 workers speeds up the analysis by 60%.
+
 Usage - Docker
 --------------
 ::
@@ -57,8 +69,8 @@ License
 -------
 Public domain.
 
-Development notes: CI, CD
--------------------------
+Continuous Integration - Continuous Delivery
+--------------------------------------------
 The CI is graciously operated by Travis: https://travis-ci.org/hmalphettes/s3-storage-analyser
 and codecov: https://codecov.io/gh/hmalphettes/s3-storage-analyser
 
