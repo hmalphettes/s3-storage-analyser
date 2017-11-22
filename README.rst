@@ -9,13 +9,10 @@ S3 Storage Analyser - WIP
 =========================
 A command line tool to display the objects stored in your AWS S3 account.
 
-Requirements
--------------
-python-3.x
-
 Development
 -----------
-For now development install only.
+Requirement: python3
+
 ::
 
     git clone --depth 1 https://github.com/hmalphettes/s3_storage_analyser
