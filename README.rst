@@ -5,9 +5,19 @@
 .. image:: https://images.microbadger.com/badges/version/hmalphettes/s3-storage-analyser.svg
     :target: https://hub.docker.com/r/hmalphettes/s3-storage-analyser
 
-S3 Storage Analyser - WIP
-=========================
+S3 Storage Analyser
+===================
 A command line tool to display the objects stored in your AWS S3 account.
+
+WIP: switch from S3's API to Cloudwatch metrics
+==============================================
+Currently the tool provides a real time count of the buckets.
+It does it by listing the objects in each bucket: S3's API does not support summing by itself.
+
+I am going to switch to using the Cloudwatch API where the metrics we need are stored.
+The drawback is that we lose the realtime tracking as those metrics are updated once a day.
+
+See https://github.com/hmalphettes/s3-storage-analyser/issues/3
 
 Development
 -----------
