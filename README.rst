@@ -62,10 +62,6 @@ Note: if the machine where Docker is running is not configured with an appropria
 
     docker run -e AWS_ACCESS_KEY_ID=123 -e AWS_SECRET_ACCESS_KEY=456 --rm hmalphettes/s3-storage-analyser --unit KB
 
-License
--------
-Public domain.
-
 Continuous Integration - Continuous Delivery
 --------------------------------------------
 The CI is graciously operated by Travis: https://travis-ci.org/hmalphettes/s3-storage-analyser
@@ -85,3 +81,15 @@ The run logs are sent as a notification to a slack channel:
 The setup of such an infra is currently not automated. Some documentation here: https://github.com/hmalphettes/s3-storage-analyser/tree/master/integration
 
 TODO: Commit the output into a github repository to monitor the state of the build as well as the evolution of the content of the buckets.
+
+Next steps
+----------
+- Support for https on the VM where all this is tested
+- REST endpoint
+- Analysis of public big-data set
+- Enrich the statistics displayed
+
+License
+-------
+Public domain.
+
