@@ -7,7 +7,7 @@ import re
 import multiprocessing as multi
 from pprint import pprint
 from operator import itemgetter
-from datetime import datetime
+from datetime import datetime, timedelta, time
 import pytz
 import boto3
 import tabulate
@@ -33,6 +33,101 @@ def convert_bytes(nbytes, unit='MB', append_unit=False):
 def _get_s3_client():
     """Return the s3 connection."""
     return boto3.client('s3')
+
+def _get_scw_client():
+    """Return the cloudwatch connection."""
+    return boto3.client('cloudwatch')
+
+def _list_metrics(**kwargs):
+    """Generator to iterate the metrics found in a bucket.
+    yield one metric at a time"""
+    res = _get_scw_client().list_metrics(**kwargs)
+    metrics = res['Metrics']
+    for metric in metrics:
+        yield metric
+
+    if 'NextToken' in res:
+        kwargs['NextToken'] = res['NextToken']
+        for i in _list_metrics(**kwargs):
+            yield i
+
+def _get_bucket_name(metric):
+    for dimension in metric['Dimensions']:
+        if dimension['Name'] == 'BucketName':
+            return dimension['Value']
+
+def list_metrics(prefix=None, max_keys=None):
+    """Return the list of buckets {'Name','CreationDate'}"""
+    kwargs = {'Namespace': 'AWS/S3'}
+    if prefix is not None:
+        kwargs['Prefix'] = prefix
+    if max_keys is not None:
+        kwargs['MaxKeys'] = max_keys
+    metrics = []
+    for metric in _list_metrics(**kwargs):
+        # skip the buckets we are not interested in
+        bucket_name = _get_bucket_name(metric)
+        if prefix != None and bucket_name != prefix:
+            continue
+        metrics.append(metric)
+    return metrics
+
+def get_metrics_data(metrics):
+    pending_requests = []
+    print(f'number of metrix {len(metrics)}')
+    for metric in metrics:
+        metric_name = metric['MetricName']
+        if metric_name == 'NumberOfObjects':
+            pending_requests.append(_make_req(metric, 'Count'))
+        elif metric_name == 'BucketSizeBytes':
+            pending_requests.append(_make_req(metric, 'Bytes'))
+    if pending_requests:
+        print(f'number of requests {len(pending_requests)}')
+        return run_requests(pending_requests)
+
+def _today():
+    return datetime.combine(datetime.utcnow().date(), time.min)
+
+def _make_req(metric, unit):
+    today = _today()
+    return {
+        'Namespace': metric['Namespace'],
+        'MetricName': metric['MetricName'],
+        'Dimensions': metric['Dimensions'],
+        'Statistics': [
+            # http://docs.aws.amazon.com/AmazonS3/latest/dev/cloudwatch-monitoring.html#s3-cloudwatch-metrics
+            'Average'
+        ],
+        # http://docs.aws.amazon.com/AmazonS3/latest/dev/cloudwatch-monitoring.html#cloudwatch-monitoring-accessing
+        'StartTime': today - timedelta(days=1),
+        'EndTime': today,
+        'Period': 86400, # 1 day
+        'Unit': unit
+    }
+
+def run_requests(reqs, pool_size=None):
+    if pool_size is None:
+        # TODO: should we use more workers than we have cpus?
+        pool_size = multi.cpu_count()
+    # pool = multi.Pool(pool_size)
+    # data = list(pool.map(get_metric, reqs))
+    data = list(map(get_metric, reqs))
+    pprint(data)
+
+def get_metric(req):
+    resp = _get_scw_client().get_metric_statistics(**req)
+    if resp['Datapoints']:
+        for dimension in req['Dimensions']:
+            if dimension['Name'] == 'BucketName':
+                bucket_name = dimension['Value']
+            elif dimension['Name'] == 'StorageType':
+                storage_type = dimension['Value']
+        return {
+            'MetricName': req['MetricName'],
+            'BucketName': bucket_name,
+            'StorageType': storage_type,
+            'Value': resp['Datapoints'][0]
+        }
 
 def _list_buckets(prefix=None):
     """Return the list of buckets {'Name','CreationDate'} """
@@ -242,8 +337,11 @@ def report(prefix=None, unit='MB', tablefmt='plain', pool_size=None):
 
 def main():
     """CLI entry point"""
-    args = parse_args()
-    print(report(prefix=args.prefix, unit=args.unit, pool_size=args.pool_size))
+    # args = parse_args()
+    # print(report(prefix=args.prefix, unit=args.unit, pool_size=args.pool_size))
+    metrics = list_metrics()
+    pprint(get_metrics_data(metrics))
+
 
 if __name__ == "__main__":
     main()
