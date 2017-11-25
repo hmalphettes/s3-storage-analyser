@@ -78,7 +78,7 @@ Please do request the token parameter to access the API.
 
 ::
 
-    curl -s "http://s3analyser.huguesm.name/?token=$_TOKEN&fmt=tsv" | column -t
+    curl -s "https://s3analyser.huguesm.name/?token=$_TOKEN&fmt=tsv" | column -t
     Bucket                Region          Files    Total(MB)  STD(MB)  RR(MB)  IA(MB)  Creation(UTC)
     hm.samples.eu-west1   eu-west-1       3.0      0          0.13     0       0       2017-11-18T08:12:38
     hm.many02             ap-southeast-1  10000.0  0          0.19     0       0       2017-11-18T08:14:13
@@ -89,7 +89,7 @@ Please do request the token parameter to access the API.
 
 ::
 
-    curl -s "http://s3analyser.huguesm.name/?token=$_TOKEN&fmt=json" | jq .
+    curl -s "https://s3analyser.huguesm.name/?token=$_TOKEN&fmt=json" | jq .
     {
     "Buckets": [
         {
@@ -128,6 +128,7 @@ Next steps
 ----------
 - Support for prefix or at least bucket glob/list
 - Enrich the statistics displayed
+- Prometheus exporter
 
 License
 -------
