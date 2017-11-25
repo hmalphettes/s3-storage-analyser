@@ -126,7 +126,6 @@ TODO: Commit the output into a github repository to monitor the state of the bui
 
 Next steps
 ----------
-- Support for https on the VM where all this is tested
 - Support for prefix or at least bucket glob/list
 - Enrich the statistics displayed
 

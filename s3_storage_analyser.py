@@ -24,8 +24,8 @@ def parse_args():
     parser.add_argument(
         '--fmt', # type='string',
         choices=['json_pretty', 'json', 'tsv', 'csv', 'plain', 'simple', 'grid',
-                 'pipe', 'orgtbl', 'rst', 'mediawiki', 'latex'],
-        help='report format json|plain|simple|grid|pipe|orgtbl|rst|mediawiki|latex',
+                 'pipe', 'orgtbl', 'rst', 'mediawiki', 'latex', 'html'],
+        help='report format json|plain|simple|grid|pipe|orgtbl|rst|mediawiki|latex|tsv|csv|json_pretty|html',
         default='plain')
     return parser.parse_args()
 
