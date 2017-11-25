@@ -118,7 +118,7 @@ def _list_metrics(**kwargs):
     # The moto library has some issue returning a strange next token
     # when there should be none
     if 'NextToken' in res and not res['NextToken'].startswith('\n '):
-        kwargs['NextToken'] = res['NextToken'].strip()
+        kwargs['NextToken'] = res['NextToken']
         kwargs['_region'] = region
         for i in _list_metrics(**kwargs):
             yield i

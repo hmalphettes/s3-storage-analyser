@@ -105,10 +105,13 @@ def test_buckets_filter():
 def test_get_metrics(monkeypatch):
     """Test get the metrics"""
     _setup(monkeypatch)
+    # improve the coverage: test without pool as the coverage pool ignores the workers
+    s3_storage_analyser._POOL_SIZE[0] = 1
     buckets = list_buckets()
     metrics = list_metrics(buckets)
     assert len(metrics) == 3
     assert metrics[0]['_region'] == 'us-east-1'
+    s3_storage_analyser._POOL_SIZE[0] = None
 
 @mock_cloudwatch
 @mock_s3
