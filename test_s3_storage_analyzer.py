@@ -1,16 +1,20 @@
 """
-Test indeed
+Unit Tests
 """
-import boto3
-from pprint import pprint
 from datetime import datetime
 from io import StringIO
 import sys
 from contextlib import redirect_stdout
-from s3_storage_analyser import _get_s3_client, _list_buckets, _format_buckets, _analyse_bucket
-from s3_storage_analyser import convert_bytes, traverse_bucket, fetch_bucket_info
-from s3_storage_analyser import main, list_metrics, get_metrics_data
+
+from s3_storage_analyser import (
+    list_buckets, fold_metrics_data, convert_bytes,
+    main, list_metrics, get_metrics_data, _today)
+import s3_storage_analyser
+
 from moto import mock_s3, mock_cloudwatch
+import boto3
+import pytz
+import pytest
 
 def test_convert_bytes():
     """Test convert bytes to a unit"""
@@ -18,8 +22,8 @@ def test_convert_bytes():
     assert convert_bytes(1048576, 'KB', True) == '1024KB'
     assert convert_bytes(1073741824, 'GB') == '1'
 
-def _put_metric(bucket_name, metric_name, storage_type, value, unit):
-    clientcw = boto3.client('cloudwatch')
+def _put_metric(region, bucket_name, metric_name, storage_type, value, unit):
+    clientcw = boto3.client('cloudwatch', region)
     clientcw.put_metric_data(Namespace='AWS/S3', MetricData=[{
         'MetricName': metric_name,
         'Dimensions': [
@@ -42,106 +46,103 @@ def _put_metric(bucket_name, metric_name, storage_type, value, unit):
         },
         'Unit': unit
     }])
+    return {
+        'Datapoints': [{
+            'Average'  : value,
+            'Timestamp': pytz.utc.localize(_today()),
+            'Unit'     : unit
+        }],
+        'Label': metric_name
+    }
 
-def _setup():
-    client = _get_s3_client()
+def _setup(monkeypatch):
+    client = boto3.client('s3')
     name = 'hm.samples'
     client.create_bucket(Bucket=name)
     for i in range(0, 3):
         client.put_object(Bucket=name, Body=b'abcdef', Key=f'{i}.txt')
     client.put_object(Bucket=name, Body=b'abcdef', Key='sub/4.txt')
+
+    # mock the metrics data: moto does not yet support mocking get_metrics_data
+    data_points = []
     for storage_type in ['StandardStorage', 'AllStorageTypes']:
-        _put_metric(name, 'BucketSizeBytes', storage_type, 24.0, 'Bytes')
-        _put_metric(name, 'NumberOfObjects', storage_type, 4.0, 'Count')
+        data_points.append(_put_metric(
+            'us-east-1', name, 'BucketSizeBytes', storage_type, 24.0, 'Bytes'))
+    data_points.append(_put_metric(
+        'us-east-1', name, 'NumberOfObjects', 'AllStorageTypes', 4.0, 'Count'))
 
-@mock_cloudwatch
-@mock_s3
-def test_get_metrics():
-    """Test get the metrics"""
-    _setup()
-    metrics = list_metrics()
-    pprint(metrics)
-    assert len(metrics) == 4
-    pprint(get_metrics_data(metrics))
-
-@mock_cloudwatch
-@mock_s3
-def test_traverse_bucket():
-    """Traverse bucket. single internal call"""
-    _setup()
-    bucket_descr = _analyse_bucket({'Name': 'hm.samples', '_prefix': None})
-    assert bucket_descr['TotalFiles'] == 4
-    assert bucket_descr['TotalSize'] == 24
-
-@mock_cloudwatch
-@mock_s3
-def test_traverse_bucket_prefix():
-    """Traverse bucket. prefix to select a single file"""
-    _setup()
-    bucket_descr = traverse_bucket('hm.samples', prefix='s3://hm.samples/1.txt')
-    assert bucket_descr['TotalFiles'] == 1
-    assert bucket_descr['TotalSize'] == 6
-
-@mock_cloudwatch
-@mock_s3
-def test_traverse_bucket_2():
-    """Traverse bucket. multiple s3 calls as there are more resources than the max_keys"""
-    _setup()
-    bucket_descr = traverse_bucket('hm.samples', max_keys=2)
-    assert bucket_descr['TotalFiles'] == 4
-    assert bucket_descr['TotalSize'] == 24
-    assert bucket_descr['StorageStats']['STANDARD']['TotalFiles'] == 4
-
-@mock_cloudwatch
-@mock_s3
-def test_bucket_xinfo():
-    """Test loading the extra info of a bucket"""
-    client = _get_s3_client()
-    client.create_bucket(Bucket='hm.samples.encrypted')
-    client.put_bucket_encryption(
-        Bucket='hm.samples.encrypted',
-        ServerSideEncryptionConfiguration={
-            'Rules': [
-                {
-                    'ApplyServerSideEncryptionByDefault': {
-                        'SSEAlgorithm': 'AES256',
-                        'KMSMasterKeyID': 'foo'
-                    }
-                },
-            ]
-        }
-    )
-    bucket_info = fetch_bucket_info({'Name':'hm.samples.encrypted'})
-    assert bucket_info['Region'] == 'us-east-1'
+    def _mock_get_stats(**req):
+        assert '_region' in req
+        return data_points.pop(0)
+    monkeypatch.setattr(s3_storage_analyser, '_get_metric_statistics', _mock_get_stats)
 
 @mock_cloudwatch
 @mock_s3
 def test_buckets_filter():
     """Test listing the buckets"""
-    client = _get_s3_client()
-    # map(lambda n: client.create_bucket(Bucket=n), ['aa', 'a', 'b']) # does not work. why?
+    client = boto3.client('s3')
     for name in ['c', 'a', 'aa']:
         client.create_bucket(Bucket=name)
-    bucket_list = _list_buckets()
+    bucket_list = list_buckets()
     assert len(bucket_list) == 3
     assert bucket_list[0]['Name'] == 'a'
+    assert bucket_list[0]['Region'] == 'us-east-1'
+    assert bucket_list[0]['CreationDate'] is not None
 
-    bucket_list = _list_buckets(prefix='s3://a')
+    bucket_list = list_buckets(prefix='s3://a')
     assert len(bucket_list) == 2
 
-def test_format_buckets():
-    """Format and tabulate the buckets"""
-    buckets = [{
-        'Name': 'hm.samples',
-        'Region': 'us-east-1',
-        'CreationDate': datetime.now(),
-        'LastModified': datetime.now(),
-        'TotalSize': 1048576, # 1MB
-        'TotalFiles': 6
-    }]
-    formatted = _format_buckets(buckets)
-    assert formatted['values'][0][0] == 'hm.samples'
-    assert formatted['values'][0][4] == '1' # 1MB
+@mock_cloudwatch
+@mock_s3
+def test_get_metrics(monkeypatch):
+    """Test get the metrics"""
+    _setup(monkeypatch)
+    buckets = list_buckets()
+    metrics = list_metrics(buckets)
+    assert len(metrics) == 3
+    assert metrics[0]['_region'] == 'us-east-1'
+
+@mock_cloudwatch
+@mock_s3
+def test_get_metrics_data(monkeypatch):
+    """Check the sanity of the shape of the datapoint"""
+    _setup(monkeypatch)
+    buckets = list_buckets()
+    metrics = list_metrics(buckets)
+    data = get_metrics_data(metrics, buckets)
+    assert len(data) == 3
+    for prop in ['BucketName', 'CreationDate', 'Name', 'Region', 'StorageType', 'Value']:
+        for datapoint in data:
+            assert prop in datapoint
+    assert data[0]['BucketName'] == 'hm.samples'
+    assert data[0]['Region'] == 'us-east-1'
+
+@mock_cloudwatch
+@mock_s3
+# @pytest.mark.skip(reason="moto does not support get_metric_statistics")
+def test_fold_metrics_data(monkeypatch):
+    """Test folding the datapoints"""
+    _setup(monkeypatch)
+    buckets = list_buckets()
+    metrics = list_metrics(buckets)
+    datapoints = get_metrics_data(metrics, buckets)
+    folded = fold_metrics_data(datapoints)
+    for index_type in ['bybucket', 'byregion']:
+        index = folded[index_type]
+        assert len(index.keys()) == 1
+        key, value = index.popitem()
+        if index_type == 'bybucket':
+            assert key == 'hm.samples'
+            assert value['Bucket'] == 'hm.samples'
+        else:
+            assert key == 'us-east-1'
+            assert value['Buckets'] == 1
+        assert value['Region'] == 'us-east-1'
+        assert value['Files'] == 4
+        assert value['Bytes'] == 24.0
+        assert value['Bytes-ST'] == 24.0
+        assert value['Bytes-RR'] == 0
+        assert value['Bytes-IA'] == 0
 
 def _call_main(args_str):
     sio = StringIO()
@@ -156,19 +157,47 @@ def _call_main(args_str):
 
 @mock_cloudwatch
 @mock_s3
-def test_main():
+def test_main(monkeypatch):
     """Test main call no prefix"""
-    _setup()
+    _setup(monkeypatch)
     out = _call_main('s3_storage_analyser.py --unit KB')
     lines = out.splitlines()
-    assert ' Size KB ' in lines[0]
+    assert ' Total(KB) ' in lines[0]
     assert ' 0.02 ' in lines[1]
 
 @mock_cloudwatch
 @mock_s3
-def test_main_prefix():
-    """Test main call no prefix"""
-    _setup()
+def test_main_tab(monkeypatch):
+    """Test main call tab format"""
+    _setup(monkeypatch)
+    out = _call_main('s3_storage_analyser.py --unit KB --fmt tab')
+    lines = out.splitlines()
+    assert '\tTotal(KB)\t' in lines[0]
+    assert '\t0.02\t' in lines[1]
+
+@mock_cloudwatch
+@mock_s3
+def test_main_json(monkeypatch):
+    """Test main call json format"""
+    _setup(monkeypatch)
+    out = _call_main('s3_storage_analyser.py --unit KB --fmt json')
+    assert out.startswith('{"Buckets": [{"Bucket": "hm.samples"')
+    assert len(out.splitlines()) == 1
+
+@mock_cloudwatch
+@mock_s3
+def test_main_json_pretty(monkeypatch):
+    """Test main call pretty json format"""
+    _setup(monkeypatch)
+    out = _call_main('s3_storage_analyser.py --unit KB --fmt json_pretty')
+    assert len(out.splitlines()) > 10
+
+@mock_cloudwatch
+@mock_s3
+@pytest.mark.skip(reason="not ready yet")
+def test_main_prefix(monkeypatch):
+    """Test main call with prefix"""
+    _setup(monkeypatch)
     out = _call_main('s3_storage_analyser.py --unit KB --prefix s3://hm.samples --pool-size 4')
     lines = out.splitlines()
     assert ' Size KB ' in lines[0]
@@ -176,9 +205,10 @@ def test_main_prefix():
 
 @mock_cloudwatch
 @mock_s3
-def test_main_wrong_prefix():
-    """Test main call no prefix"""
-    _setup()
+@pytest.mark.skip(reason="not ready yet")
+def test_main_wrong_prefix(monkeypatch):
+    """Test main call wrong prefix"""
+    _setup(monkeypatch)
     try:
         _call_main('s3_storage_analyser.py --unit KB --prefix hm.samples')
     except ValueError as err:

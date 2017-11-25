@@ -9,15 +9,28 @@ S3 Storage Analyser
 ===================
 A command line tool to display the objects stored in your AWS S3 account.
 
-WIP: switch from S3's API to Cloudwatch metrics
-==============================================
-Currently the tool provides a real time count of the buckets.
-It does it by listing the objects in each bucket: S3's API does not support summing by itself.
+Strategy: Use Cloudwatch metrics
+================================
+There are 2 possible ways to count files in S3 with a standard setup:
 
-I am going to switch to using the Cloudwatch API where the metrics we need are stored.
-The drawback is that we lose the realtime tracking as those metrics are updated once a day.
+- Using the S3 API: `get_object_list_v2`.
+- Using the S3 metrics stored in Cloudwatch
 
-See https://github.com/hmalphettes/s3-storage-analyser/issues/3
+Using the S3 API is an O(n) where n is the number of items.
+We can parallelize the queries to S3 by buckets or by prefixes.
+If the data is well distributed by prefixes we can execute up to 300 requests concurrently as mentionned by the AWS documentation: O(n/300)
+So we are still at an O(n)
+
+By default a basic inventory of the objects stored in S3 is maintained in the Cloudwatch S3 metrics.
+
+Advantage:
+
+- performance is O(N) where N is the number of buckets (or regions whichever is the largest).
+
+Drawbacks:
+
+- Not real-time. The inventory is updated once a day
+- No information to compute the LastModified date of a bucket (let me know if there is something)
 
 Development
 -----------
@@ -33,32 +46,27 @@ Usage - Command Line
 --------------------
 ::
 
-    hugues in ~/proj/springcleaning/s3-storage-analyser on master*
-    ⚡ python s3_storage_analyser.py --unit TB --prefix s3://hm
-    Bucket                Region          Created                    Last Modified                Size MB    Files
-    hm.many01             ap-southeast-1  2017-11-18T08:13:58+00:00  2017-11-18T08:37:59+00:00       0.06    10000
-    hm.many02             ap-southeast-1  2017-11-18T08:14:14+00:00  2017-11-18T08:50:51+00:00       0.06    10000
-    hm.many03             ap-southeast-1  2017-11-18T08:14:25+00:00  2017-11-18T09:30:26+00:00       0.13    22001
-    hm.samples            ap-southeast-1  2017-11-16T08:13:39+00:00  2017-11-16T08:47:39+00:00       2.15        4
-    hm.samples.encrypted  ap-southeast-1  2017-11-16T08:15:17+00:00  2017-11-16T08:47:05+00:00       3.27        1
-    hm.samples.eu-west1   eu-west-1       2017-11-18T08:12:38+00:00  2017-11-19T07:59:18+00:00       0.13        2
-    hm.samples.versioned  ap-southeast-1  2017-11-16T08:16:19+00:00  0001-01-01T00:00:00+00:00       0           0
+    python3 s3_storage_analyser.py
+    Bucket                Region            Files    Total(MB)    STD(MB)    RR(MB)    IA(MB)  Creation(UTC)
+    hm.many02             ap-southeast-1    10000         0.19       0.19         0         0  2017-11-18T08:14:15
+    hm.many01             ap-southeast-1    10000         0.19       0.19         0         0  2017-11-18T08:13:58
+    hm.many03             ap-southeast-1    22001         0.42       0.42         0         0  2017-11-18T08:14:25
+    hm.samples            ap-southeast-1        4         2.16       2.16         0         0  2017-11-16T08:13:39
+    hm.samples.encrypted  ap-southeast-1        1         3.27       3.27         0         0  2017-11-16T08:15:17
+    hm.samples.eu-west1   eu-west-1             3         0.13       0.13         0         0  2017-11-18T08:12:38
 
-    Region            Buckets    Size MB    Files    Std MB    Std Files    RR MB    RR Files    IA MB    IA Files
-    ap-southeast-1          6       5.67    42006      5.67        42006        0           0        0           0
-    eu-west-1               1       0.13        2      0.13            2        0           0        0           0
-
-Note that currently only the buckets owned by the AWS account configured can be analysed.
+Note that currently only the buckets owned by the AWS account configured are analysed.
 
 Performance
 -----------
 The requests to S3 are parallelised for each bucket up to the number of workers in the pool.
-That number is defined by the parameter `--pool-size`.
+The requests to Cloudwatch are parallelised per region and then per metric requests.
+
+That number of workers is defined by the parameter `--conc`.
 
 It defaults to the number of CPUs available on the machine.
 
 Even on a AWS t2.micro instance which uses a single CPU, a pool of 6 workers is reasonable.
-On the samples on my bucket, executing with 6 workers speeds up the analysis by 60%.
 
 Usage - Docker
 --------------
@@ -96,7 +104,6 @@ Next steps
 ----------
 - Support for https on the VM where all this is tested
 - REST endpoint
-- Analysis of public big-data set
 - Enrich the statistics displayed
 
 License
