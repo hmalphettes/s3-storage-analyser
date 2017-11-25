@@ -84,6 +84,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(out)
+        except subprocess.CalledProcessError as err:
+            msg = f'{err.__str__()} {err.output}'
+            print(f'Analysis - Subprocess Error {msg}')
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(msg.encode())
         except Exception as err:
             self.send_response(500)
             self.end_headers()
@@ -126,6 +132,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                 # Security: Dont allow our service to be used for any kind of docker images!
                 repo_name = 'hmalphettes/s3-storage-analyser'
             out = _run_onbuild(repo_name, tag)
+            print(out)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(out)
@@ -135,10 +142,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(err.__str__())
         except subprocess.CalledProcessError as err:
-            print(f'Subprocess Error {err.__str__().encode()}')
+            msg = f'{err.__str__()} {err.output}'
+            print(f'Subprocess Error {msg}')
             self.send_response(500)
             self.end_headers()
-            self.wfile.write(err.__str__().encode())
+            self.wfile.write(msg.encode())
         except Exception as err:
             print(f'Error {err.__str__()}')
             self.send_response(500)
@@ -149,16 +157,18 @@ class RequestHandler(BaseHTTPRequestHandler):
 def _run_onbuild(repo_name, tag):
     try:
         if not LOCK_ONBUILD.acquire(False):
+            print('There is already an onbuild running')
             raise ValueError('There is already an onbuild running')
-        print('entered RUNNING_ONBUILD')
         script_dir = os.path.dirname(os.path.realpath(__file__))
-        full_cmd = f'{script_dir}/onbuild.sh {repo_name} {tag}'
+        full_cmd = f'bash {script_dir}/onbuild.sh {repo_name} {tag}'
+        print(f'Entered RUNNING_ONBUILD {full_cmd}')
         return subprocess.check_output(
-            full_cmd.split(' '),
+            full_cmd.split,
             stderr=subprocess.STDOUT,
             shell=True,
             executable='/bin/bash')
     finally:
+        print('Exited RUNNING_ONBUILD')
         LOCK_ONBUILD.release()
 
 def _run_analysis(unit=None, prefix=None, conc='6', fmt=None, echo=False):
@@ -176,7 +186,7 @@ def _run_analysis(unit=None, prefix=None, conc='6', fmt=None, echo=False):
     if echo:
         return full_cmd.encode()
     try:
-        print('entered RUNNING_ANALYSIS')
+        print(f'Entered RUNNING_ANALYSIS {full_cmd}')
         if not LOCK_ANALYSIS.acquire(False):
             raise ValueError('There is already an analysis running')
         return subprocess.check_output(
@@ -185,6 +195,7 @@ def _run_analysis(unit=None, prefix=None, conc='6', fmt=None, echo=False):
             shell=True,
             executable='/bin/bash')
     finally:
+        print('Exited RUNNING_ANALYSIS')
         LOCK_ANALYSIS.release()
 
 if __name__ == '__main__':

@@ -71,6 +71,39 @@ Note: if the machine where Docker is running is not configured with an appropria
 
     docker run -e AWS_ACCESS_KEY_ID=123 -e AWS_SECRET_ACCESS_KEY=456 --rm hmalphettes/s3-storage-analyser --unit KB
 
+Usage - REST
+------------
+The docker container is deployed on 'http://s3analyser.huguesm.name'
+Please do request the token parameter to access the API.
+
+::
+
+    curl -s "http://s3analyser.huguesm.name/?token=$_TOKEN&fmt=tsv" | column -t
+    Bucket                Region          Files    Total(MB)  STD(MB)  RR(MB)  IA(MB)  Creation(UTC)
+    hm.samples.eu-west1   eu-west-1       3.0      0          0.13     0       0       2017-11-18T08:12:38
+    hm.many02             ap-southeast-1  10000.0  0          0.19     0       0       2017-11-18T08:14:13
+    hm.many01             ap-southeast-1  10000.0  0          0.19     0       0       2017-11-18T08:13:58
+    hm.many03             ap-southeast-1  22001.0  0          0.42     0       0       2017-11-18T08:14:25
+    hm.samples            ap-southeast-1  4.0      0          2.16     0       0       2017-11-16T08:13:39
+    hm.samples.encrypted  ap-southeast-1  1.0      0          3.27     0       0       2017-11-16T08:15:16
+
+::
+
+    curl -s "http://s3analyser.huguesm.name/?token=$_TOKEN&fmt=json" | jq .
+    {
+    "Buckets": [
+        {
+        "Bucket": "hm.samples.eu-west1",
+        "Bytes": 0,
+        "Bytes-IA": 0,
+        "Bytes-RR": 0,
+        "Bytes-ST": 133656,
+        "CreationDate": "2017-11-18T08:12:38",
+        "Files": 3,
+        "Region": "eu-west-1"
+        },
+    ...
+
 Continuous Integration - Continuous Delivery
 --------------------------------------------
 The CI is graciously operated by Travis: https://travis-ci.org/hmalphettes/s3-storage-analyser
@@ -94,7 +127,7 @@ TODO: Commit the output into a github repository to monitor the state of the bui
 Next steps
 ----------
 - Support for https on the VM where all this is tested
-- REST endpoint
+- Support for prefix or at least bucket glob/list
 - Enrich the statistics displayed
 
 License
