@@ -179,12 +179,22 @@ def test_main(monkeypatch):
 @mock_cloudwatch
 @mock_s3
 def test_main_tab(monkeypatch):
-    """Test main call tab format"""
+    """Test main call tsv format"""
     _setup(monkeypatch)
-    out = _call_main('s3_storage_analyser.py --unit KB --fmt tab')
+    out = _call_main('s3_storage_analyser.py --unit KB --fmt tsv')
     lines = out.splitlines()
     assert '\tTotal(KB)\t' in lines[0]
     assert '\t0.02\t' in lines[1]
+
+@mock_cloudwatch
+@mock_s3
+def test_main_csv(monkeypatch):
+    """Test main call csv format"""
+    _setup(monkeypatch)
+    out = _call_main('s3_storage_analyser.py --unit KB --fmt csv')
+    lines = out.splitlines()
+    assert ',Total(KB),' in lines[0]
+    assert ',0.02,' in lines[1]
 
 @mock_cloudwatch
 @mock_s3

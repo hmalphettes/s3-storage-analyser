@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument('--conc', type=int, help='Number of parallel workers')
     parser.add_argument(
         '--fmt', # type='string',
-        choices=['json_pretty', 'json', 'tab', 'plain', 'simple', 'grid',
+        choices=['json_pretty', 'json', 'tsv', 'csv', 'plain', 'simple', 'grid',
                  'pipe', 'orgtbl', 'rst', 'mediawiki', 'latex'],
         help='report format json|plain|simple|grid|pipe|orgtbl|rst|mediawiki|latex',
         default='plain')
@@ -335,9 +335,10 @@ def report(prefix=None, unit='MB', conc=None, fmt='plain'):
     if fmt == 'json' or fmt == 'json_pretty':
         return _json_dumps(folded['bybucket'], pretty=True if fmt == 'json_pretty' else False)
     headers, rows = _format_buckets(folded['bybucket'].values(), unit=unit)
-    if fmt == 'tab':
-        lines = ['\t'.join(str(x) for x in row) for row in rows]
-        return '\t'.join(headers) + '\n' + '\n'.join(lines)
+    if fmt == 'tsv' or fmt == 'csv':
+        sep = '\t' if fmt == 'tsv' else ','
+        lines = [sep.join(str(x) for x in row) for row in rows]
+        return sep.join(headers) + '\n' + '\n'.join(lines)
     tabulated = tabulate.tabulate(rows, headers=headers, tablefmt=fmt)
     return tabulated
 
