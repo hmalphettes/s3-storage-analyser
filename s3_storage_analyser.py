@@ -135,8 +135,7 @@ def get_metrics_data(metrics, buckets):
             pending_requests.append(_make_req(metric, 'Count', regions_bybucket))
         elif metric_name == 'BucketSizeBytes':
             pending_requests.append(_make_req(metric, 'Bytes', regions_bybucket))
-    if pending_requests:
-        return _run_requests(pending_requests, buckets)
+    return _run_requests(pending_requests, buckets)
 
 def _today():
     return datetime.combine(datetime.utcnow().date(), time.min)
@@ -175,19 +174,18 @@ def _run_requests(reqs, buckets):
 def get_metric(req):
     """Fetch the data for a metric"""
     resp = _get_metric_statistics(**req)
-    if resp['Datapoints']:
-        average = resp['Datapoints'][0]['Average']
-        for dimension in req['Dimensions']:
-            if dimension['Name'] == 'BucketName':
-                bucket_name = dimension['Value']
-            elif dimension['Name'] == 'StorageType':
-                storage_type = dimension['Value']
-        return {
-            'MetricName': req['MetricName'],
-            'BucketName': bucket_name,
-            'StorageType': storage_type,
-            'Value': average
-        }
+    average = resp['Datapoints'][0]['Average']
+    for dimension in req['Dimensions']:
+        if dimension['Name'] == 'BucketName':
+            bucket_name = dimension['Value']
+        elif dimension['Name'] == 'StorageType':
+            storage_type = dimension['Value']
+    return {
+        'MetricName': req['MetricName'],
+        'BucketName': bucket_name,
+        'StorageType': storage_type,
+        'Value': average
+    }
 
 def _get_metric_statistics(**kwargs):
     """Call boto3.get_metric_statistics
