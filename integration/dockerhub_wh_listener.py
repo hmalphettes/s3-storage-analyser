@@ -73,10 +73,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         for param in [unit, prefix, conc, fmt]:
             if param is None:
                 continue
-            if ' ' in param or '\t' in param or len(param) > 32:
-                self.send_response(401)
-                self.end_headers()
-                return
+            for char in [ ';', '|', '&', ' ', '\t', '"' ]:
+                if char in param:
+                    self.send_response(401)
+                    self.end_headers()
+                    return
 
         try:
             out = _run_analysis(unit=unit, prefix=prefix, conc=conc, fmt=fmt, echo=echo)
@@ -162,15 +163,15 @@ def _run_onbuild(repo_name, tag):
 
 def _run_analysis(unit=None, prefix=None, conc='6', fmt=None, echo=False):
     # full_cmd = 'docker images'
-    full_cmd = f'docker run --rm hmalphettes/s3-storage-analyser'
+    full_cmd = f'docker run --rm --net host hmalphettes/s3-storage-analyser'
     if fmt is not None:
-        full_cmd += f' --fmt {fmt}'
+        full_cmd += f' --fmt "{fmt}"'
     if unit is not None:
-        full_cmd += f' --unit {unit}'
+        full_cmd += f' --unit "{unit}"'
     if prefix is not None:
-        full_cmd += f' --prefix {prefix}'
+        full_cmd += f' --prefix "{prefix}"'
     if conc is not None:
-        full_cmd += f' --conc {conc}'
+        full_cmd += f' --conc "{conc}"'
     print(full_cmd)
     if echo:
         return full_cmd.encode()
