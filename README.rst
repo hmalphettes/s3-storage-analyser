@@ -113,8 +113,8 @@ The docker image is graciously operated by Docker Hub on every commit and every 
 
 Integration testing
 -------------------
-The test integration is run from a VM on EC2. A Docker Hub webhook sends the event to the VM.
-The corresponding docker image that was built is pulled and a the tool is run against a set of S3 buckets with 42k files.
+The test integration is run on a VM on AWS EC2. A Docker Hub webhook sends the event to the VM.
+The corresponding docker image that was built is pulled and the tool is run against a set of S3 buckets with 42k files.
 
 The run logs are sent as a notification to a slack channel:
 
