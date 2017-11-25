@@ -216,12 +216,11 @@ def test_main_prefix(monkeypatch):
 
 @mock_cloudwatch
 @mock_s3
-@pytest.mark.skip(reason="not ready yet")
 def test_main_wrong_prefix(monkeypatch):
     """Test main call wrong prefix"""
     _setup(monkeypatch)
     try:
-        _call_main('s3_storage_analyser.py --unit KB --prefix hm.samples')
+        _call_main('s3_storage_analyser.py --unit KB --prefix hm.samples --conc 1')
     except ValueError as err:
         assert 'Invalid prefix' in err.__str__()
         return
