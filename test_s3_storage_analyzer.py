@@ -23,8 +23,8 @@ def test_convert_bytes():
     assert convert_bytes(1048576, 'KB', True) == '1024KB'
     assert convert_bytes(1073741824, 'GB') == '1'
 
-def _put_metric(region, bucket_name, metric_name, storage_type, value, unit):
-    clientcw = boto3.client('cloudwatch', region)
+def _put_metric(bucket_name, metric_name, storage_type, value, unit):
+    clientcw = boto3.client('cloudwatch', 'us-east-1')
     clientcw.put_metric_data(Namespace='AWS/S3', MetricData=[{
         'MetricName': metric_name,
         'Dimensions': [
@@ -70,9 +70,9 @@ def _setup(monkeypatch):
     data_points = []
     for storage_type in ['StandardStorage', 'AllStorageTypes']:
         data_points.append(_put_metric(
-            'us-east-1', name, 'BucketSizeBytes', storage_type, 24.0, 'Bytes'))
+            name, 'BucketSizeBytes', storage_type, 24.0, 'Bytes'))
     data_points.append(_put_metric(
-        'us-east-1', name, 'NumberOfObjects', 'AllStorageTypes', 4.0, 'Count'))
+        name, 'NumberOfObjects', 'AllStorageTypes', 4.0, 'Count'))
 
     def _mock_get_stats(**req):
         assert '_region' in req

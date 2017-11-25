@@ -6,12 +6,11 @@ import argparse
 import re
 import json
 import multiprocessing as multi
-from pprint import pprint
+# from pprint import pprint
 from operator import itemgetter
 from datetime import datetime, timedelta, time
 import pytz
 import boto3
-import botocore
 import tabulate
 
 def parse_args():
@@ -74,14 +73,13 @@ def _get_bucket_name(metric):
         if dimension['Name'] == 'BucketName':
             return dimension['Value']
 
-def list_metrics(buckets, prefix=None, max_keys=None):
+def list_metrics(buckets, prefix=None):
     """Return the list of buckets {'Name','CreationDate','Region'}"""
     regions = set()
     for bucket in buckets:
         regions.add(bucket['Region'])
     kwargs_list = [{
         'prefix': prefix,
-        'max_keys': max_keys,
         'region': region
     } for region in regions]
     return sum(_conc_map(_list_regional_metrics, kwargs_list), [])
@@ -90,12 +88,9 @@ def _list_regional_metrics(params):
     """ return the list of S3 metrics for a given region """
     region = params['region']
     prefix = params['prefix']
-    max_keys = params['max_keys']
     kwargs = {'Namespace': 'AWS/S3', '_region': region}
     if prefix is not None:
         kwargs['Prefix'] = prefix
-    if max_keys is not None:
-        kwargs['MaxKeys'] = max_keys
     metrics = []
     for metric in _list_metrics(**kwargs):
         # skip the buckets we are not interested in
