@@ -171,7 +171,7 @@ def _call_main(args_str):
 def test_main(monkeypatch):
     """Test main call no prefix"""
     _setup(monkeypatch)
-    out = _call_main('s3_storage_analyser.py --unit KB')
+    out = _call_main('s3_storage_analyser.py --unit KB --conc 4')
     lines = out.splitlines()
     assert ' Total(KB) ' in lines[0]
     assert ' 0.02 ' in lines[1]
