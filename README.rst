@@ -11,26 +11,17 @@ A command line tool to display the objects stored in your AWS S3 account.
 
 Strategy: Use Cloudwatch metrics
 ================================
-There are 2 possible ways to count files in S3 with a standard setup:
++-------------------------------------------------+-------------------------------------------------+-------------------------------------------------------+
+| Strategy                                        | Performance                                     | Drawbacks                                             |
++=================================================+=================================================+=======================================================+
+| S3 API get_objects_list_v2                      | O(n) where n is the number of objects           | Slow                                                  |
++-------------------------------------------------+-------------------------------------------------+-------------------------------------------------------+
+| Cloudwatch get_metrics and get_metrics_stats    | O(N) where N is the number of buckets           | No LastModified, no complex filtering, not realtime   |
++-------------------------------------------------+-------------------------------------------------+-------------------------------------------------------+
+| S3 Inventory                                    | As good as the DB where the inventory is stored | Setup and pay for each bucket. Maintain a DB and ETL. |
++-------------------------------------------------+-------------------------------------------------+-------------------------------------------------------+
 
-- Using the S3 API: `get_object_list_v2`.
-- Using the S3 metrics stored in Cloudwatch
-
-Using the S3 API is an O(n) where n is the number of items.
-We can parallelize the queries to S3 by buckets or by prefixes.
-If the data is well distributed by prefixes we can execute up to 300 requests concurrently as mentionned by the AWS documentation: O(n/300)
-So we are still at an O(n)
-
-By default a basic inventory of the objects stored in S3 is maintained in the Cloudwatch S3 metrics.
-
-Advantage:
-
-- performance is O(N) where N is the number of buckets (or regions whichever is the largest).
-
-Drawbacks:
-
-- Not real-time. The inventory is updated once a day
-- No information to compute the LastModified date of a bucket (let me know if there is something)
+As a starting point this implementation uses the Cloudwatch metrics.
 
 Development
 -----------
