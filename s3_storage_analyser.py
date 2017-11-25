@@ -11,6 +11,7 @@ from operator import itemgetter
 from datetime import datetime, timedelta, time
 import pytz
 import boto3
+import botocore
 import tabulate
 
 def parse_args():
@@ -37,7 +38,7 @@ def convert_bytes(nbytes, unit='MB', append_unit=False):
     formatted = ('%.2f' % (nbytes/UNIT_DEFS[unit])).rstrip('0').rstrip('.')
     return f'{formatted}{unit}' if append_unit else formatted
 
-_POOL_SIZE = [1]
+_POOL_SIZE = [None]
 __POOL = [None]
 def _conc_map(fct, iterable):
     if __POOL[0] is not None:
@@ -49,6 +50,11 @@ def _conc_map(fct, iterable):
     pool = multi.Pool(_POOL_SIZE[0])
     __POOL[0] = pool
     return pool.map(fct, iterable)
+
+def _stop_pool():
+    if __POOL[0] is not None:
+        __POOL[0].close()
+        __POOL[0] = None
 
 def list_buckets(prefix=None):
     """Return the list of buckets {'Name','CreationDate'} """
@@ -207,9 +213,13 @@ def _add_bucket_info(datapoints, buckets):
 def fetch_bucket_info(bucket):
     """Fetches some extra info about the bucket: adds the region"""
     name = bucket['Name']
-    bucket_location = boto3.client('s3').get_bucket_location(Bucket=name)['LocationConstraint']
-    bucket.update({'Region': bucket_location})
-    return bucket
+    try:
+        bucket_location = boto3.client('s3').get_bucket_location(Bucket=name)['LocationConstraint']
+        bucket.update({'Region': bucket_location})
+        return bucket
+    except Exception as err:
+        msg = err.__str__()
+        raise ValueError(f'{name} {msg}')
 
 FOLDED_KEYS = {
     # MetricName-StorageType -> Folded column name

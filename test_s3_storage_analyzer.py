@@ -4,6 +4,7 @@ Unit Tests
 from datetime import datetime
 from io import StringIO
 import sys
+from pprint import pprint
 from contextlib import redirect_stdout
 
 from s3_storage_analyser import (
@@ -52,10 +53,12 @@ def _put_metric(region, bucket_name, metric_name, storage_type, value, unit):
             'Timestamp': pytz.utc.localize(_today()),
             'Unit'     : unit
         }],
-        'Label': metric_name
+        'Label': metric_name,
+        '_storage_type': storage_type
     }
 
 def _setup(monkeypatch):
+    s3_storage_analyser._stop_pool()
     client = boto3.client('s3')
     name = 'hm.samples'
     client.create_bucket(Bucket=name)
@@ -73,7 +76,12 @@ def _setup(monkeypatch):
 
     def _mock_get_stats(**req):
         assert '_region' in req
-        return data_points.pop(0)
+        metric_type = req['MetricName']
+        storage_type = req['Dimensions'][0]['Value']
+        for index, elem in enumerate(data_points):
+            if elem['Label'] == metric_type and elem['_storage_type'] == storage_type:
+                return data_points.pop(index)
+        raise ValueError('Unable to find the appropriate mock datapoint')
     monkeypatch.setattr(s3_storage_analyser, '_get_metric_statistics', _mock_get_stats)
 
 @mock_cloudwatch
