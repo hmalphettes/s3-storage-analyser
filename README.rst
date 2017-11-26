@@ -9,6 +9,10 @@ S3 Storage Analyser
 ===================
 A command line tool to display the objects stored in your AWS S3 account.
 
+WIP: Prometheus client
+======================
+Expose the numbers as metrics for Prometheus
+
 Strategy: Use Cloudwatch metrics
 ================================
 +-------------------------------------------------+-------------------------------------------------+-------------------------------------------------------+
