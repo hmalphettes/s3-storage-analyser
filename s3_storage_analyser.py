@@ -13,7 +13,7 @@ import pytz
 import boto3
 import tabulate
 
-def parse_args():
+def parse_args(args=None):
     """cli parser"""
     parser = argparse.ArgumentParser(description='Analyse the S3 Buckets of an Amazon AWS account.')
     parser.add_argument('--unit', # type='string',
@@ -27,7 +27,7 @@ def parse_args():
                  'pipe', 'orgtbl', 'rst', 'mediawiki', 'latex', 'html'],
         help='report format json|plain|simple|grid|pipe|orgtbl|rst|mediawiki|latex|tsv|csv|json_pretty|html',
         default='plain')
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 STORAGE_TYPES = ['STANDARD', 'REDUCED_REDUNDANCY', 'GLACIER']
 UNIT_DEFS = {'B': 1, 'KB':1024, 'MB':1024**2, 'GB':1024**3, 'TB':1024**4}
@@ -50,7 +50,7 @@ def _conc_map(fct, iterable):
     __POOL[0] = pool
     return pool.map(fct, iterable)
 
-def _stop_pool():
+def stop_pool():
     if __POOL[0] is not None:
         __POOL[0].close()
         __POOL[0] = None
@@ -323,7 +323,7 @@ def _json_dumps(buckets_data, pretty=False):
     res = {'Buckets': list(buckets_data.values())}
     return json.dumps(res, sort_keys=True, indent=4 if pretty else None)
 
-def report(prefix=None, unit='MB', conc=None, fmt='plain'):
+def analyse(prefix=None, unit='MB', conc=None, fmt='plain'):
     """Generates a formatted report"""
     if conc is not None:
         _POOL_SIZE[0] = conc
@@ -345,13 +345,13 @@ def report(prefix=None, unit='MB', conc=None, fmt='plain'):
 def main():
     """CLI entry point"""
     args = parse_args()
-    rep = report(
+    analysis = analyse(
         prefix=args.prefix,
         unit=args.unit,
         conc=args.conc,
         fmt=args.fmt
     )
-    print(rep)
+    print(analysis)
 
 
 if __name__ == "__main__":

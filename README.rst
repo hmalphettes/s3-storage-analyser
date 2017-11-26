@@ -104,6 +104,12 @@ Please do request the token parameter to access the API.
         },
     ...
 
+To run the REST endpoint for development:
+
+::
+
+    TOKEN=secret python3 -m server
+
 Continuous Integration - Continuous Delivery
 --------------------------------------------
 The CI is graciously operated by Travis: https://travis-ci.org/hmalphettes/s3-storage-analyser

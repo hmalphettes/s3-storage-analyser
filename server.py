@@ -3,12 +3,12 @@ Simple HTTP endpoint that invokes the command-line tool
 """
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
-import subprocess
 import threading
 import os
 
+from s3_storage_analyser import analyse, parse_args, stop_pool
 
-# Run a single onbuild or analysis at a time
+# Run a single analysis at a time
 LOCK_ANALYSIS = threading.Lock()
 
 class RequestHandler(BaseHTTPRequestHandler):
@@ -20,6 +20,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if 'ico' in self.path:
+            # Ignore favicon.ico
             self.send_response(404)
             self.end_headers()
             return
@@ -52,7 +53,6 @@ class RequestHandler(BaseHTTPRequestHandler):
         echo = 'echo' in query_components
         if fmt is None:
             accept = self.headers['Accept'] if 'Accept' in self.headers else ''
-            print(f'accept: {accept}')
             if query_components.get('pretty'):
                 fmt = 'json_pretty'
             elif 'json' in accept:
@@ -72,7 +72,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         for param in [unit, prefix, conc, fmt]:
             if param is None:
                 continue
-            for char in [ ';', '|', '&', ' ', '\t', '"']:
+            for char in [';', '|', '&', ' ', '\t', '"']:
                 if char in param:
                     self.send_response(401)
                     self.end_headers()
@@ -83,12 +83,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
             self.wfile.write(out)
-        except subprocess.CalledProcessError as err:
-            msg = f'{err.__str__()} {err.output}'
-            print(f'Analysis - Subprocess Error {msg}')
-            self.send_response(500)
-            self.end_headers()
-            self.wfile.write(msg.encode())
         except Exception as err:
             self.send_response(500)
             self.end_headers()
@@ -96,33 +90,50 @@ class RequestHandler(BaseHTTPRequestHandler):
         return
 
 def _run_analysis(unit=None, prefix=None, conc='6', fmt=None, echo=False):
-    # full_cmd = 'docker images'
+    if not LOCK_ANALYSIS.acquire(False):
+        raise ValueError('There is already an analysis running')
     full_cmd = f'python3 ./s3_storage_analyser.py'
+    args = []
     if fmt is not None:
         full_cmd += f' --fmt "{fmt}"'
+        args.append('--fmt')
+        args.append(fmt)
     if unit is not None:
         full_cmd += f' --unit "{unit}"'
+        args.append('--unit')
+        args.append(unit)
     if prefix is not None:
         full_cmd += f' --prefix "{prefix}"'
+        args.append('--prefix')
+        args.append(prefix)
     if conc is not None:
         full_cmd += f' --conc "{conc}"'
+        args.append('--conc')
+        args.append(conc)
+    full_cmd += ' '.join(args)
     print(full_cmd)
     if echo:
         return full_cmd.encode()
     try:
         print(f'Entered RUNNING_ANALYSIS {full_cmd}')
-        if not LOCK_ANALYSIS.acquire(False):
-            raise ValueError('There is already an analysis running')
-        return subprocess.check_output(
-            full_cmd,
-            stderr=subprocess.STDOUT,
-            shell=True,
-            executable='/bin/bash')
+        args = parse_args(args)
+        analysis = analyse(
+            prefix=args.prefix,
+            unit=args.unit,
+            conc=args.conc,
+            fmt=args.fmt
+        ).encode()
+        stop_pool()
+        return analysis
+
     finally:
         print('Exited RUNNING_ANALYSIS')
         LOCK_ANALYSIS.release()
 
 if __name__ == '__main__':
-    SERVER = HTTPServer(('localhost', 8000), RequestHandler)
-    print('Starting s3analyser endpoint at http://localhost:8000')
+    PORT = 8000
+    if 'S3ANALYSER_PORT' in os.environ:
+        PORT = int(os.environ['S3ANALYSER_PORT'])
+    SERVER = HTTPServer(('localhost', PORT), RequestHandler)
+    print(f'Starting s3analyser endpoint at http://localhost:{PORT}')
     SERVER.serve_forever()

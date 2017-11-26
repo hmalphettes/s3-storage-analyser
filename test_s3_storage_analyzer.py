@@ -4,7 +4,6 @@ Unit Tests
 from datetime import datetime
 from io import StringIO
 import sys
-from pprint import pprint
 from contextlib import redirect_stdout
 
 from s3_storage_analyser import (
@@ -58,7 +57,7 @@ def _put_metric(bucket_name, metric_name, storage_type, value, unit):
     }
 
 def _setup(monkeypatch):
-    s3_storage_analyser._stop_pool()
+    s3_storage_analyser.stop_pool()
     client = boto3.client('s3')
     name = 'hm.samples'
     client.create_bucket(Bucket=name)
