@@ -142,7 +142,6 @@ TODO: Commit the output into a github repository to monitor the state of the bui
 
 Next steps
 ----------
-- Support for prefix or at least bucket glob/list
 - Enrich the statistics displayed
 - Prometheus exporter
 
