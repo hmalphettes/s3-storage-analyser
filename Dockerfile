@@ -6,5 +6,4 @@ RUN pip install --requirement /tmp/requirements.txt && \
 COPY *.py /app/
 WORKDIR /app
 USER nobody
-ENTRYPOINT [ "python3", "/app/s3_storage_analyser.py" ]
-CMD [ "--help" ]
+ENTRYPOINT [ "python3", "s3_storage_analyser.py" ]

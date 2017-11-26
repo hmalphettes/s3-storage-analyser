@@ -21,12 +21,15 @@ elif [ -n "$2" ]; then
     # Hardcode the repository because this service is opened to the world
     # and we certainly dont want to let any image have a run on our server.
     pull_stdout=$(docker pull "hmalphettes/s3-storage-analyser:$2")
+    prune_stdout=$(docker image prune --force)
     if res2=$(docker run --rm --net host "hmalphettes/s3-storage-analyser:$2" --unit KB --conc 6); then
-      codeblock='```'
+      codeblock="\`\`\`"
       notify "Integration test of hmalphettes/s3-storage-analyser:
 $codeblock
 docker pull hmalphettes/s3-storage-analyser:$2
 $pull_stdout
+docker image prune
+$prune_stdout
 $codeblock
 
 Integration test:

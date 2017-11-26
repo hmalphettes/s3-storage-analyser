@@ -3,14 +3,15 @@ of hmalphettes/s3-storage-analyser is completed"""
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 from pprint import pprint
+from traceback import print_exception
 import subprocess
 import threading
 import os
 import json
 
-# Run a single onbuild or analysis at a time
+# Simple global rate limit:
+# Run a single onbuild at a time
 LOCK_ONBUILD = threading.Lock()
-LOCK_ANALYSIS = threading.Lock()
 
 class RequestHandler(BaseHTTPRequestHandler):
 
@@ -27,14 +28,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         token = os.environ['TOKEN'] or 's3cr3t'
 
-        query_components = {
-            'token': None,
-            'unit': None,
-            'prefix': None,
-            'conc': None,
-            'fmt': None,
-            'pretty': None
-        }
+        query_components = {'token': None}
         query = urlparse(self.path).query
         if query:
             query_components.update(dict(qc.split("=") for qc in query.split('&')))
@@ -44,58 +38,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_response(302)
             self.send_header('Location', 'https://github.com/hmalphettes/s3-storage-analyser')
             self.end_headers()
+            self.wfile.write(b'Redirecting to https://github.com/hmalphettes/s3-storage-analyser\n')
             return
 
-        unit = query_components['unit']
-        prefix = query_components['prefix']
-        conc = query_components['conc']
-        fmt = query_components['fmt']
-        echo = 'echo' in query_components
-        if fmt is None:
-            accept = self.headers['Accept'] if 'Accept' in self.headers else ''
-            print(f'accept: {accept}')
-            if query_components.get('pretty'):
-                fmt = 'json_pretty'
-            elif 'json' in accept:
-                fmt = 'json'
-            elif 'csv' in accept:
-                fmt = 'csv'
-            elif 'tab-separated-values' in accept:
-                fmt = 'tsv'
-            elif 'text/plain' in accept:
-                fmt = 'plain'
-            elif 'html' in accept:
-                fmt = 'html'
-            else:
-                fmt = 'json'
-
-        # sanitize before we call docker
-        for param in [unit, prefix, conc, fmt]:
-            if param is None:
-                continue
-            for char in [ ';', '|', '&', ' ', '\t', '"' ]:
-                if char in param:
-                    self.send_response(401)
-                    self.end_headers()
-                    return
-
-        try:
-            out = _run_analysis(unit=unit, prefix=prefix, conc=conc, fmt=fmt, echo=echo)
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(out)
-        except subprocess.CalledProcessError as err:
-            msg = f'{err.__str__()} {err.output}'
-            print(f'Analysis - Subprocess Error {msg}')
-            self.send_response(500)
-            self.end_headers()
-            self.wfile.write(msg.encode())
-        except Exception as err:
-            self.send_response(500)
-            self.end_headers()
-            self.wfile.write(err.__str__().encode())
-        return
-
+        self.wfile.write(b'Welcome to the dockerhub hook listener for s3-storage-analyser')
 
     """Server for handling docker hub webhook"""
     def do_POST(self):
@@ -155,15 +101,15 @@ class RequestHandler(BaseHTTPRequestHandler):
         return
 
 def _run_onbuild(repo_name, tag):
+    if not LOCK_ONBUILD.acquire(False):
+        print('There is already an onbuild running')
+        raise ValueError('There is already an onbuild running')
     try:
-        if not LOCK_ONBUILD.acquire(False):
-            print('There is already an onbuild running')
-            raise ValueError('There is already an onbuild running')
         script_dir = os.path.dirname(os.path.realpath(__file__))
         full_cmd = f'bash {script_dir}/onbuild.sh {repo_name} {tag}'
         print(f'Entered RUNNING_ONBUILD {full_cmd}')
         return subprocess.check_output(
-            full_cmd.split,
+            full_cmd,
             stderr=subprocess.STDOUT,
             shell=True,
             executable='/bin/bash')
@@ -171,34 +117,10 @@ def _run_onbuild(repo_name, tag):
         print('Exited RUNNING_ONBUILD')
         LOCK_ONBUILD.release()
 
-def _run_analysis(unit=None, prefix=None, conc='6', fmt=None, echo=False):
-    # full_cmd = 'docker images'
-    full_cmd = f'docker run --rm --net host hmalphettes/s3-storage-analyser'
-    if fmt is not None:
-        full_cmd += f' --fmt "{fmt}"'
-    if unit is not None:
-        full_cmd += f' --unit "{unit}"'
-    if prefix is not None:
-        full_cmd += f' --prefix "{prefix}"'
-    if conc is not None:
-        full_cmd += f' --conc "{conc}"'
-    print(full_cmd)
-    if echo:
-        return full_cmd.encode()
-    try:
-        print(f'Entered RUNNING_ANALYSIS {full_cmd}')
-        if not LOCK_ANALYSIS.acquire(False):
-            raise ValueError('There is already an analysis running')
-        return subprocess.check_output(
-            full_cmd,
-            stderr=subprocess.STDOUT,
-            shell=True,
-            executable='/bin/bash')
-    finally:
-        print('Exited RUNNING_ANALYSIS')
-        LOCK_ANALYSIS.release()
-
 if __name__ == '__main__':
-    SERVER = HTTPServer(('localhost', 8000), RequestHandler)
-    print('Starting server at http://localhost:8000')
+    PORT = 8002
+    if 'DOCKERHUB_WH_PORT' in os.environ:
+        PORT = int(os.environ['DOCKERHUB_WH_PORT'])
+    SERVER = HTTPServer(('localhost', PORT), RequestHandler)
+    print(f'Starting dockerhub hook listener at http://localhost:{PORT}')
     SERVER.serve_forever()
