@@ -110,6 +110,12 @@ To run the REST endpoint for development:
 
     TOKEN=secret python3 -m server
 
+Via docker:
+
+::
+
+    docker run -e TOKEN=secret --name s3analyser_endpoint --net host -d hmalphettes/s3-storage-analyser server
+
 Continuous Integration - Continuous Delivery
 --------------------------------------------
 The CI is graciously operated by Travis: https://travis-ci.org/hmalphettes/s3-storage-analyser

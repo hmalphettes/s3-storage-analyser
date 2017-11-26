@@ -25,7 +25,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        token = os.environ['TOKEN'] or 's3cr3t'
+        token = os.environ['TOKEN']
 
         query_components = {
             'token': None,
@@ -130,10 +130,15 @@ def _run_analysis(unit=None, prefix=None, conc='6', fmt=None, echo=False):
         print('Exited RUNNING_ANALYSIS')
         LOCK_ANALYSIS.release()
 
-if __name__ == '__main__':
-    PORT = 8000
+def make_server(do_print=False):
+    """Main entrypoint"""
+    port = 8000
     if 'S3ANALYSER_PORT' in os.environ:
-        PORT = int(os.environ['S3ANALYSER_PORT'])
-    SERVER = HTTPServer(('localhost', PORT), RequestHandler)
-    print(f'Starting s3analyser endpoint at http://localhost:{PORT}')
-    SERVER.serve_forever()
+        port = int(os.environ['S3ANALYSER_PORT'])
+    if do_print:
+        print(f'Starting s3analyser endpoint at http://localhost:{port}')
+    server = HTTPServer(('localhost', port), RequestHandler)
+    return server
+
+if __name__ == '__main__':
+    make_server(do_print=True).serve_forever()

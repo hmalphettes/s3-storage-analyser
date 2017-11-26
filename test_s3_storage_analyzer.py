@@ -4,12 +4,16 @@ Unit Tests
 from datetime import datetime
 from io import StringIO
 import sys
+import os
+import threading
+import http.client
 from contextlib import redirect_stdout
 
 from s3_storage_analyser import (
     list_buckets, fold_metrics_data, convert_bytes,
     main, list_metrics, get_metrics_data, _today)
 import s3_storage_analyser
+import server
 
 from moto import mock_s3, mock_cloudwatch
 import boto3
@@ -234,3 +238,19 @@ def test_main_wrong_prefix(monkeypatch):
         assert 'Invalid prefix' in err.__str__()
         return
     raise Exception('No ValueError was raised although the prefix was wrong')
+
+@mock_cloudwatch
+@mock_s3
+def test_server(monkeypatch):
+    """Test whole server"""
+    _setup(monkeypatch)
+    http_server = server.make_server()
+    os.environ['TOKEN'] = 'hi'
+    threading.Thread(target=http_server.serve_forever).start()
+    conn = http.client.HTTPConnection('localhost:8000')
+    conn.request('GET', '/api/?token=hi&format=json')
+    res = conn.getresponse()
+    assert res.status == 200
+    data = res.read().decode()
+    assert data.startswith('{"Buckets": [{"Bucket": "hm.samples"')
+    http_server.shutdown()
