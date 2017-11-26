@@ -5,6 +5,7 @@ from datetime import datetime
 from io import StringIO
 import sys
 import os
+from pprint import pprint
 import threading
 import http.client
 from contextlib import redirect_stdout
@@ -100,7 +101,7 @@ def test_buckets_filter():
     assert bucket_list[0]['Region'] == 'us-east-1'
     assert bucket_list[0]['CreationDate'] is not None
 
-    bucket_list = list_buckets(prefix='s3://a')
+    bucket_list = list_buckets(prefix='s3://a*')
     assert len(bucket_list) == 2
 
 @mock_cloudwatch
@@ -205,7 +206,7 @@ def test_main_json(monkeypatch):
     """Test main call json format"""
     _setup(monkeypatch)
     out = _call_main('s3_storage_analyser.py --unit KB --fmt json')
-    assert out.startswith('{"Buckets": [{"Bucket": "hm.samples"')
+    assert out.startswith('{"Buckets":[{"Bucket":"hm.samples"')
     assert len(out.splitlines()) == 1
 
 @mock_cloudwatch
@@ -229,28 +230,102 @@ def test_main_prefix(monkeypatch):
 
 @mock_cloudwatch
 @mock_s3
+def test_main_bucket_prefix(monkeypatch):
+    """Test main call wrong prefix"""
+    _setup(monkeypatch)
+    out = _call_main('s3_storage_analyser.py --unit KB --prefix hm.samples --conc 1')
+    lines = out.splitlines()
+    assert len(lines) == 2
+
+@mock_cloudwatch
+@mock_s3
 def test_main_wrong_prefix(monkeypatch):
     """Test main call wrong prefix"""
     _setup(monkeypatch)
     try:
-        _call_main('s3_storage_analyser.py --unit KB --prefix hm.samples --conc 1')
+        _call_main('s3_storage_analyser.py --unit KB --prefix unknown --conc 1')
     except ValueError as err:
         assert 'Invalid prefix' in err.__str__()
         return
     raise Exception('No ValueError was raised although the prefix was wrong')
 
+def _test_server(monkeypatch, accept=None, query_string=None, port=None):
+    _setup(monkeypatch)
+    if port is not None:
+        os.environ['S3ANALYSER_PORT'] = port.__str__()
+    else:
+        port = 8000
+    os.environ['TOKEN'] = 'hi'
+    http_server = server.make_server()
+    thread = threading.Thread(target=http_server.serve_forever)
+    thread.start()
+    if query_string is None and accept is None:
+        return http_server
+    elif query_string:
+        query_string = '&' + query_string
+    else:
+        query_string = ''
+    try:
+        conn = http.client.HTTPConnection(f'localhost:{port}')
+        headers = {}
+        if accept is not None:
+            headers['Accept'] = accept
+        conn.request('GET', f'/api/?token=hi{query_string}', headers=headers)
+        res = conn.getresponse()
+        # assert res.status == 200
+        body = res.read().decode()
+        return body
+    finally:
+        if 'S3ANALYSER_PORT' in os.environ:
+            del os.environ['S3ANALYSER_PORT']
+        http_server.shutdown()
+        thread.join()
+
 @mock_cloudwatch
 @mock_s3
-def test_server(monkeypatch):
+def test_server_head(monkeypatch):
+    """Test HEAD request"""
+    _test_server(monkeypatch, query_string='')
+
+@mock_cloudwatch
+@mock_s3
+def test_server_json(monkeypatch):
     """Test whole server"""
-    _setup(monkeypatch)
-    http_server = server.make_server()
-    os.environ['TOKEN'] = 'hi'
-    threading.Thread(target=http_server.serve_forever).start()
-    conn = http.client.HTTPConnection('localhost:8000')
-    conn.request('GET', '/api/?token=hi&format=json')
-    res = conn.getresponse()
-    assert res.status == 200
-    data = res.read().decode()
-    assert data.startswith('{"Buckets": [{"Bucket": "hm.samples"')
-    http_server.shutdown()
+    data = _test_server(monkeypatch, query_string='fmt=json&unit=TB&conc=4&prefix=hm.samples', port=9001)
+    print(data)
+    assert data.startswith('{"Buckets":[{"Bucket":"hm.samples"')
+
+@mock_cloudwatch
+@mock_s3
+def test_server_json_pretty(monkeypatch):
+    """Test whole server"""
+    data = _test_server(monkeypatch, query_string='fmt=json_pretty', port=9002)
+    assert data.startswith('{\n')
+
+@mock_cloudwatch
+@mock_s3
+def test_server_tsv_accept(monkeypatch):
+    """Test whole server"""
+    data = _test_server(monkeypatch, accept='text/tab-separated-values', port=9003)
+    assert '\t' in data
+
+@mock_cloudwatch
+@mock_s3
+def test_server_csv_accept(monkeypatch):
+    """Test whole server"""
+    data = _test_server(monkeypatch, accept='text/csv', port=9004)
+    assert ',' in data
+
+@mock_cloudwatch
+@mock_s3
+def test_server_json_accept(monkeypatch):
+    """Test whole server"""
+    data = _test_server(monkeypatch, accept='application/json', port=9005)
+    assert data.startswith('{"Buckets":[{"Bucket":"hm.samples"')
+
+@mock_cloudwatch
+@mock_s3
+def test_server_html_accept(monkeypatch):
+    """Test whole server"""
+    data = _test_server(monkeypatch, accept='text/html', port=9006)
+    assert '<table>' in data

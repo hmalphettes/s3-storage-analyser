@@ -37,7 +37,7 @@ Usage - Command Line
 --------------------
 ::
 
-    python3 s3_storage_analyser.py
+    python3 -m s3_storage_analyser
     Bucket                Region            Files    Total(MB)    STD(MB)    RR(MB)    IA(MB)  Creation(UTC)
     hm.many02             ap-southeast-1    10000         0.19       0.19         0         0  2017-11-18T08:14:15
     hm.many01             ap-southeast-1    10000         0.19       0.19         0         0  2017-11-18T08:13:58
@@ -63,7 +63,7 @@ Usage - Docker
 --------------
 ::
 
-    docker run --rm hmalphettes/s3-storage-analyser --unit KB
+    docker run --rm hmalphettes/s3-storage-analyser --unit KB --prefix "hm.many*"
 
 Note: if the machine where Docker is running is not configured with an appropriate IAM role to access S3, you can resort to pass the AWS credentials as environment variables:
 

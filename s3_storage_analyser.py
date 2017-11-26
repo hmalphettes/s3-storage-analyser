@@ -6,7 +6,7 @@ import argparse
 import re
 import json
 import multiprocessing as multi
-# from pprint import pprint
+from fnmatch import fnmatchcase
 from operator import itemgetter
 from datetime import datetime, timedelta, time
 import pytz
@@ -19,7 +19,7 @@ def parse_args(args=None):
     parser.add_argument('--unit', # type='string',
                         choices=['B', 'KB', 'MB', 'GB', 'TB'],
                         help='file size unit B|KB|MB|GB|TB', default='MB')
-    parser.add_argument('--prefix', help='Filter the keys by prefix')
+    parser.add_argument('--prefix', help='Only select buckets that match a glob pattern. "s3://mybucke*"')
     parser.add_argument('--conc', type=int, help='Number of parallel workers')
     parser.add_argument(
         '--fmt', # type='string',
@@ -55,16 +55,27 @@ def stop_pool():
         __POOL[0].close()
         __POOL[0] = None
 
+def _extract_bucket_from_prefix(prefix):
+    if prefix is None:
+        return prefix
+    _m = re.match(r'^s3://([^\/]+).*$', prefix)
+    return prefix if _m is None else _m.group(1)
+
+def _is_glob(prefix):
+    for char in ['?', '*', '[', '!']:
+        if char in prefix:
+            return True
+    return False
+
 def list_buckets(prefix=None):
     """Return the list of buckets {'Name','CreationDate'} """
     resp = boto3.client('s3').list_buckets(prefix=prefix)
     buckets = resp['Buckets']
     if prefix is not None:
-        _m = re.match(r'^s3://([^\/]+).*$', prefix)
-        if _m is not None:
-            buckets = filter(lambda x: x['Name'].startswith(_m.group(1)), buckets)
-        else:
-            raise ValueError(f'Invalid prefix "{prefix}"; expected "s3://bucket_name[/blah]"')
+        bucket_name = _extract_bucket_from_prefix(prefix)
+        buckets = [bucket for bucket in buckets if fnmatchcase(bucket['Name'], bucket_name)]
+        if not buckets:
+            raise ValueError(f'Invalid prefix "{prefix}"; no bucket selected')
     buckets = list(_conc_map(fetch_bucket_info, buckets))
     return sorted(buckets, key=itemgetter('Name'))
 
@@ -79,7 +90,7 @@ def list_metrics(buckets, prefix=None):
     for bucket in buckets:
         regions.add(bucket['Region'])
     kwargs_list = [{
-        'prefix': prefix,
+        'prefix': _extract_bucket_from_prefix(prefix),
         'region': region
     } for region in regions]
     return sum(_conc_map(_list_regional_metrics, kwargs_list), [])
@@ -89,13 +100,13 @@ def _list_regional_metrics(params):
     region = params['region']
     prefix = params['prefix']
     kwargs = {'Namespace': 'AWS/S3', '_region': region}
-    if prefix is not None:
-        kwargs['Prefix'] = prefix
+    if prefix is not None and not _is_glob(prefix):
+        kwargs['Dimensions'] = [{'Name': 'BucketName', 'Value': prefix}]
     metrics = []
     for metric in _list_metrics(**kwargs):
         # skip the buckets we are not interested in
         bucket_name = _get_bucket_name(metric)
-        if prefix != None and bucket_name != prefix:
+        if prefix != None and not fnmatchcase(bucket_name, prefix):
             continue
         # pass the region for the next cloudwatch API call
         metric['_region'] = region
@@ -321,7 +332,10 @@ def _json_dumps(buckets_data, pretty=False):
     for data in buckets_data.values():
         data['CreationDate'] = data['CreationDate'].replace(tzinfo=None).isoformat('T', 'seconds')
     res = {'Buckets': list(buckets_data.values())}
-    return json.dumps(res, sort_keys=True, indent=4 if pretty else None)
+    if pretty:
+        return json.dumps(res, sort_keys=True, indent=2)
+    else:
+        return json.dumps(res, sort_keys=True, separators=(',', ':'))
 
 def analyse(prefix=None, unit='MB', conc=None, fmt='plain'):
     """Generates a formatted report"""

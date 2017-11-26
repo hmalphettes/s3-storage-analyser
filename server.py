@@ -15,7 +15,6 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         self.send_response(200)
-        self.send_header('Content-type', 'text/plain')
         self.end_headers()
 
     def do_GET(self):
@@ -53,9 +52,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         echo = 'echo' in query_components
         if fmt is None:
             accept = self.headers['Accept'] if 'Accept' in self.headers else ''
-            if query_components.get('pretty'):
-                fmt = 'json_pretty'
-            elif 'json' in accept:
+            if 'json' in accept:
                 fmt = 'json'
             elif 'csv' in accept:
                 fmt = 'csv'
