@@ -65,16 +65,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             else:
                 fmt = 'json'
 
-        # sanitize before we call docker
-        for param in [unit, prefix, conc, fmt]:
-            if param is None:
-                continue
-            for char in [';', '|', '&', ' ', '\t', '"']:
-                if char in param:
-                    self.send_response(401)
-                    self.end_headers()
-                    return
-
         try:
             out = _run_analysis(unit=unit, prefix=prefix, conc=conc, fmt=fmt, echo=echo)
             self.send_response(200)

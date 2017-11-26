@@ -249,7 +249,7 @@ def test_main_wrong_prefix(monkeypatch):
         return
     raise Exception('No ValueError was raised although the prefix was wrong')
 
-def _test_server(monkeypatch, accept=None, query_string=None, port=None):
+def _test_server(monkeypatch, accept=None, method='GET', full_path=None, query_string=None, port=None, status_code=200):
     _setup(monkeypatch)
     if port is not None:
         os.environ['S3ANALYSER_PORT'] = port.__str__()
@@ -259,20 +259,24 @@ def _test_server(monkeypatch, accept=None, query_string=None, port=None):
     http_server = server.make_server()
     thread = threading.Thread(target=http_server.serve_forever)
     thread.start()
-    if query_string is None and accept is None:
-        return http_server
-    elif query_string:
-        query_string = '&' + query_string
-    else:
-        query_string = ''
+    if full_path is None:
+        if query_string is None and accept is None:
+            return http_server
+        elif query_string:
+            query_string = '?token=hi&' + query_string
+        elif query_string is None:
+            query_string = '?token=hi'
+        else:
+            query_string = ''
+        full_path = f'/api/{query_string}'
     try:
         conn = http.client.HTTPConnection(f'localhost:{port}')
         headers = {}
         if accept is not None:
             headers['Accept'] = accept
-        conn.request('GET', f'/api/?token=hi{query_string}', headers=headers)
+        conn.request(method, full_path, headers=headers)
         res = conn.getresponse()
-        # assert res.status == 200
+        assert res.status == status_code
         body = res.read().decode()
         return body
     finally:
@@ -285,13 +289,25 @@ def _test_server(monkeypatch, accept=None, query_string=None, port=None):
 @mock_s3
 def test_server_head(monkeypatch):
     """Test HEAD request"""
-    _test_server(monkeypatch, query_string='')
+    _test_server(monkeypatch, query_string='', method='HEAD')
+
+@mock_cloudwatch
+@mock_s3
+def test_server_auth(monkeypatch):
+    """Test getting redirected if auth token is missing"""
+    _test_server(monkeypatch, query_string=False, status_code=302, port=9001)
+
+@mock_cloudwatch
+@mock_s3
+def test_server_favicon(monkeypatch):
+    """Test favicon request"""
+    _test_server(monkeypatch, full_path='/favicon.ico', status_code=404, port=9002)
 
 @mock_cloudwatch
 @mock_s3
 def test_server_json(monkeypatch):
     """Test whole server"""
-    data = _test_server(monkeypatch, query_string='fmt=json&unit=TB&conc=4&prefix=hm.samples', port=9001)
+    data = _test_server(monkeypatch, query_string='fmt=json&unit=TB&conc=4&prefix=hm.samples', port=9003)
     print(data)
     assert data.startswith('{"Buckets":[{"Bucket":"hm.samples"')
 
@@ -299,33 +315,40 @@ def test_server_json(monkeypatch):
 @mock_s3
 def test_server_json_pretty(monkeypatch):
     """Test whole server"""
-    data = _test_server(monkeypatch, query_string='fmt=json_pretty', port=9002)
+    data = _test_server(monkeypatch, query_string='fmt=json_pretty', port=9004)
     assert data.startswith('{\n')
 
 @mock_cloudwatch
 @mock_s3
 def test_server_tsv_accept(monkeypatch):
     """Test whole server"""
-    data = _test_server(monkeypatch, accept='text/tab-separated-values', port=9003)
+    data = _test_server(monkeypatch, accept='text/tab-separated-values', port=9005)
     assert '\t' in data
 
 @mock_cloudwatch
 @mock_s3
 def test_server_csv_accept(monkeypatch):
     """Test whole server"""
-    data = _test_server(monkeypatch, accept='text/csv', port=9004)
+    data = _test_server(monkeypatch, accept='text/csv', port=9006)
     assert ',' in data
 
 @mock_cloudwatch
 @mock_s3
 def test_server_json_accept(monkeypatch):
     """Test whole server"""
-    data = _test_server(monkeypatch, accept='application/json', port=9005)
+    data = _test_server(monkeypatch, accept='application/json', port=9007)
     assert data.startswith('{"Buckets":[{"Bucket":"hm.samples"')
 
 @mock_cloudwatch
 @mock_s3
 def test_server_html_accept(monkeypatch):
     """Test whole server"""
-    data = _test_server(monkeypatch, accept='text/html', port=9006)
+    data = _test_server(monkeypatch, accept='text/html', port=9008)
     assert '<table>' in data
+
+@mock_cloudwatch
+@mock_s3
+def test_server_accept_textplain(monkeypatch):
+    """Test whole server"""
+    data = _test_server(monkeypatch, accept='text/plain', port=9009)
+    assert 'hm.samples' in data
