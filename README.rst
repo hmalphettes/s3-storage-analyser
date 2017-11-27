@@ -122,6 +122,12 @@ Via docker:
 Usage Prometheus
 ----------------
 
+The metrics are exposed as Prometheus metrics under the /metrics URL.
+
+A Prometheus server can scrape them to store them in its timeseries database:
+
+.. image:: https://github.com/hmalphettes/s3-storage-analyser/raw/master/onbuild-notification.jpg
+
 
 Continuous Integration - Continuous Delivery
 --------------------------------------------
@@ -144,6 +150,8 @@ The setup of such an infra is currently not automated. Some documentation here: 
 Next steps
 ----------
 - Enrich the statistics displayed
+- Enable the S3-API analyser: it is long running but the results are stored by prometheus
+- Setup Grafana and make a dashboard
 
 License
 -------
