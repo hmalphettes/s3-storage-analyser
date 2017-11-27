@@ -21,9 +21,10 @@ elif [ -n "$2" ]; then
     # Hardcode the repository because this service is opened to the world
     # and we certainly dont want to let any image have a run on our server.
     pull_stdout=$(docker pull "hmalphettes/s3-storage-analyser:$2")
-    prune_stdout=$(docker image prune --force)
-    if res2=$(docker run --rm --net host "hmalphettes/s3-storage-analyser:$2" --unit KB --conc 6); then
-      codeblock="\`\`\`"
+    prune_stdout=$(docker image prune --force || true)
+    codeblock="\`\`\`"
+    cmd_integ_test="docker run --rm --net host --tmpfs /tmp -e PROM_TEXT=/tmp/metrics.prom hmalphettes/s3-storage-analyser:$2 s3_storage_analyser --unit KB --conc 6"
+    if res2=$($cmd_integ_test 2>&1); then
       notify "Integration test of hmalphettes/s3-storage-analyser:
 $codeblock
 docker pull hmalphettes/s3-storage-analyser:$2
@@ -34,10 +35,22 @@ $codeblock
 
 Integration test:
 $codeblock
+$cmd_integ_test
 $res2
 $codeblock
 "
+      if [ "$2" = "latest" ]; then
+        docker rm --force s3analyser_endpoint
+        docker run --name s3analyser_endpoint -e TOKEN="$TOKEN" \
+          --tmpfs /tmp -e PROM_TEXT=/tmp/metrics.prom \
+          --net host -d hmalphettes/s3-storage-analyser server --restart=on-failure
+      fi
     else
-      notify 'Integration test failed. Please ssh in the server and run "journalctl -xfeu dockerhub_wh"'
+      notify "Integration test failed. Please ssh in the server and run \"journalctl -xfeu dockerhub_wh\":
+$codeblock
+$cmd_integ_test
+$res2
+$codeblock
+"
     fi
 fi
