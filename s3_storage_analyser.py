@@ -3,6 +3,7 @@ S3 Storage Analysis Tool
 """
 
 import argparse
+import os
 import re
 import json
 import multiprocessing as multi
@@ -12,6 +13,7 @@ from datetime import datetime, timedelta, time
 import pytz
 import boto3
 import tabulate
+from prometheus_client import CollectorRegistry, Gauge, push_to_gateway, write_to_textfile
 
 def parse_args(args=None):
     """cli parser"""
@@ -19,7 +21,7 @@ def parse_args(args=None):
     parser.add_argument('--unit', # type='string',
                         choices=['B', 'KB', 'MB', 'GB', 'TB'],
                         help='file size unit B|KB|MB|GB|TB', default='MB')
-    parser.add_argument('--prefix', help='Only select buckets that match a glob pattern. "s3://mybucke*"')
+    parser.add_argument('--prefix', help='Only select buckets that match a glob. "s3://mybucke*"')
     parser.add_argument('--conc', type=int, help='Number of parallel workers')
     parser.add_argument(
         '--fmt', # type='string',
@@ -50,7 +52,37 @@ def _conc_map(fct, iterable):
     __POOL[0] = pool
     return pool.map(fct, iterable)
 
+"""
+Prometheus Gauges:
+Objects:
+    _size_bytes
+        *region  (cardinality: 16)
+        *bucket  (cardinality: < 1000)
+    _files_total
+        *region  (cardinality: 16)
+        *storage (cardinality: 3)
+        *bucket  (cardinality: < 1000 ?)
+Hence number of timeseries < 16*3*1000 + 16*1000 = 64k
+This number is perfectly fine with Prometheus
+"""
+_OBJECT_GAUGE_SIZE_LABELS = ['region', 'storage', 'bucket']
+_OBJECT_GAUGE_NUMBER_LABELS = ['region', 'bucket']
+OBJECT_GAUGES = {}
+REGISTRY = [None]
+def _set_object_gauge(name, value, **kwargs):
+    """Set the value of a gauge; be careful to only do this from a single
+    thread and to push to gateway before the thread is over"""
+    if REGISTRY[0] is None:
+        REGISTRY[0] = CollectorRegistry()
+    if name not in OBJECT_GAUGES:
+        OBJECT_GAUGES[name] = Gauge(
+            name, 'Number of buckets',
+            _OBJECT_GAUGE_SIZE_LABELS if 'size' in name else _OBJECT_GAUGE_NUMBER_LABELS,
+            registry=REGISTRY[0])
+    OBJECT_GAUGES[name].labels(**kwargs).set(value)
+
 def stop_pool():
+    """Stop the pool of sub processes"""
     if __POOL[0] is not None:
         __POOL[0].close()
         __POOL[0] = None
@@ -69,7 +101,7 @@ def _is_glob(prefix):
 
 def list_buckets(prefix=None):
     """Return the list of buckets {'Name','CreationDate'} """
-    resp = boto3.client('s3').list_buckets(prefix=prefix)
+    resp = boto3.client('s3').list_buckets()
     buckets = resp['Buckets']
     if prefix is not None:
         bucket_name = _extract_bucket_from_prefix(prefix)
@@ -191,6 +223,8 @@ def get_metric(req):
             bucket_name = dimension['Value']
         elif dimension['Name'] == 'StorageType':
             storage_type = dimension['Value']
+    # Note: We cant update the gauge from here: this is not in the main process
+    # and it is a lot easier when everything is in the same process.
     return {
         'MetricName': req['MetricName'],
         'BucketName': bucket_name,
@@ -224,6 +258,47 @@ def fetch_bucket_info(bucket):
     except Exception as err:
         msg = err.__str__()
         raise ValueError(f'{name} {msg}')
+
+def update_gauges(metrics_data):
+    """
+    Update the gauges from the metrics data:
+    cloudwatchs3_objects_total region,bucket
+    cloudwatchs3_size_bytes    region,bucket,storage
+    """
+    for data in metrics_data:
+        bucket = data['BucketName']
+        region = data['Region']
+        value = data['Value']
+        if data['MetricName'] == 'NumberOfObjects':
+            _set_object_gauge(f'cloudwatch_s3_objects_total', value, region=region, bucket=bucket)
+        # name = '_size_bytes'
+        storage_type = data['StorageType']
+        st_abr = None
+        if storage_type == 'StandardStorage':
+            st_abr = 'st'
+        elif storage_type == 'StandardIAStorage':
+            st_abr = 'ia'
+        elif storage_type == 'ReducedRedundancyStorage':
+            st_abr = 'rr'
+        else: # AllStorageTypes
+            # we could store it as a separate timeseries;
+            # but we can compute it easily on the prom server by doing a sum
+            continue
+        _set_object_gauge(f'cloudwatch_s3_size_bytes', value,
+                          region=region, bucket=bucket, storage=st_abr)
+    commit_gauges()
+
+def get_metrics_prom():
+    """Return the path to the metrics.prom file"""
+    return os.getenv('PROM_TEXT', default='metrics.prom')
+
+def commit_gauges():
+    """Either push the gauges to a gatway if PROM_GATEWAY is set
+    or write them into a file if PROM_TEXT is set"""
+    if 'PROM_GATEWAY' in os.environ:
+        push_to_gateway(os.environ['PROM_GATEWAY'], job='s3analyser', registry=REGISTRY[0])
+        return
+    write_to_textfile(get_metrics_prom(), REGISTRY[0])
 
 FOLDED_KEYS = {
     # MetricName-StorageType -> Folded column name
@@ -344,7 +419,7 @@ def analyse(prefix=None, unit='MB', conc=None, fmt='plain'):
     buckets = list_buckets(prefix=prefix)
     metrics = list_metrics(buckets, prefix=prefix)
     metrics_data = get_metrics_data(metrics, buckets)
-    # pprint(metrics_data)
+    update_gauges(metrics_data)
     folded = fold_metrics_data(metrics_data)
     if fmt == 'json' or fmt == 'json_pretty':
         return _json_dumps(folded['bybucket'], pretty=True if fmt == 'json_pretty' else False)

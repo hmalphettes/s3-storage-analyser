@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 import threading
 import os
 
-from s3_storage_analyser import analyse, parse_args, stop_pool
+from s3_storage_analyser import analyse, parse_args, stop_pool, get_metrics_prom
 
 # Run a single analysis at a time
 LOCK_ANALYSIS = threading.Lock()
@@ -22,6 +22,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             # Ignore favicon.ico
             self.send_response(404)
             self.end_headers()
+            return
+
+        if self.path.startswith('/metrics'):
+            metrics_prom = get_metrics_prom()
+            self.send_response(200)
+            self.send_header('Content-type','text/plain')
+            self.end_headers()
+            if os.path.exists(metrics_prom):
+                file = open(metrics_prom, 'rb')
+                self.wfile.write(file.read())
+                file.close()
             return
 
         token = os.environ['TOKEN']
@@ -75,6 +86,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(err.__str__().encode())
         return
+
+    def log_request(self, code='-', size='-'):
+        pass
+
+    def log_error(self, format, *args):
+        self.log_message(format, *args)
 
 def _run_analysis(unit=None, prefix=None, conc='6', fmt=None, echo=False):
     if not LOCK_ANALYSIS.acquire(False):

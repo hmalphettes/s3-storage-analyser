@@ -11,8 +11,8 @@ import http.client
 from contextlib import redirect_stdout
 
 from s3_storage_analyser import (
-    list_buckets, fold_metrics_data, convert_bytes,
-    main, list_metrics, get_metrics_data, _today)
+    list_buckets, fold_metrics_data, convert_bytes, update_gauges,
+    main, list_metrics, get_metrics_data, _today, get_metrics_prom)
 import s3_storage_analyser
 import server
 
@@ -159,6 +159,17 @@ def test_fold_metrics_data(monkeypatch):
         assert value['Bytes-RR'] == 0
         assert value['Bytes-IA'] == 0
 
+@mock_cloudwatch
+@mock_s3
+# @pytest.mark.skip(reason="moto does not support get_metric_statistics")
+def test_set_gauges(monkeypatch):
+    """Test setting the prometheus gaugaes from the datapoints"""
+    _setup(monkeypatch)
+    buckets = list_buckets()
+    metrics = list_metrics(buckets)
+    datapoints = get_metrics_data(metrics, buckets)
+    update_gauges(datapoints)
+
 def _call_main(args_str):
     sio = StringIO()
     with redirect_stdout(sio):
@@ -249,8 +260,11 @@ def test_main_wrong_prefix(monkeypatch):
         return
     raise Exception('No ValueError was raised although the prefix was wrong')
 
-def _test_server(monkeypatch, accept=None, method='GET', full_path=None, query_string=None, port=None, status_code=200):
+def _test_server(monkeypatch, accept=None, method='GET', full_path=None,
+                 query_string=None, port=None, status_code=200):
     _setup(monkeypatch)
+    if os.path.exists(get_metrics_prom()):
+        os.remove(get_metrics_prom())
     if port is not None:
         os.environ['S3ANALYSER_PORT'] = port.__str__()
     else:
@@ -278,6 +292,14 @@ def _test_server(monkeypatch, accept=None, method='GET', full_path=None, query_s
         res = conn.getresponse()
         assert res.status == status_code
         body = res.read().decode()
+
+        # Make sure we can get some metrics
+        conn.request('GET', '/metrics')
+        metrics = conn.getresponse()
+        if status_code == 200:
+            assert metrics.status == 200
+            if method != 'HEAD':
+                assert metrics.read().decode()
         return body
     finally:
         if 'S3ANALYSER_PORT' in os.environ:
@@ -307,9 +329,11 @@ def test_server_favicon(monkeypatch):
 @mock_s3
 def test_server_json(monkeypatch):
     """Test whole server"""
+    os.environ['PROM_TEXT'] = 'test.prom'
     data = _test_server(monkeypatch, query_string='fmt=json&unit=TB&conc=4&prefix=hm.samples', port=9003)
     print(data)
     assert data.startswith('{"Buckets":[{"Bucket":"hm.samples"')
+    del os.environ['PROM_TEXT']
 
 @mock_cloudwatch
 @mock_s3

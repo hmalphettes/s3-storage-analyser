@@ -8,10 +8,7 @@
 S3 Storage Analyser
 ===================
 A command line tool to display the objects stored in your AWS S3 account.
-
-WIP: Prometheus client
-======================
-Expose the numbers as metrics for Prometheus
+Exposes the metrics extracted for Prometheus under the `/metrics` endpoint.
 
 Strategy: Use Cloudwatch metrics
 ================================
@@ -26,6 +23,8 @@ Strategy: Use Cloudwatch metrics
 +-------------------------------------------------+-------------------------------------------------+-------------------------------------------------------+
 
 As a starting point this implementation uses the Cloudwatch metrics.
+
+Prior art: https://www.opsdash.com/blog/aws-s3-cloudwatch-monitoring.html
 
 Development
 -----------
@@ -120,6 +119,10 @@ Via docker:
 
     docker run -e TOKEN=secret --name s3analyser_endpoint --net host -d hmalphettes/s3-storage-analyser server
 
+Usage Prometheus
+----------------
+
+
 Continuous Integration - Continuous Delivery
 --------------------------------------------
 The CI is graciously operated by Travis: https://travis-ci.org/hmalphettes/s3-storage-analyser
@@ -138,12 +141,9 @@ The run logs are sent as a notification to a slack channel:
 
 The setup of such an infra is currently not automated. Some documentation here: https://github.com/hmalphettes/s3-storage-analyser/tree/master/integration
 
-TODO: Commit the output into a github repository to monitor the state of the build as well as the evolution of the content of the buckets.
-
 Next steps
 ----------
 - Enrich the statistics displayed
-- Prometheus exporter
 
 License
 -------
