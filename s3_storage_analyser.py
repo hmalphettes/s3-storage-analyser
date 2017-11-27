@@ -298,7 +298,6 @@ def commit_gauges():
     if 'PROM_GATEWAY' in os.environ:
         push_to_gateway(os.environ['PROM_GATEWAY'], job='s3analyser', registry=REGISTRY[0])
         return
-    print('About to write the gauges in ' + get_metrics_prom())
     write_to_textfile(get_metrics_prom(), REGISTRY[0])
 
 FOLDED_KEYS = {
