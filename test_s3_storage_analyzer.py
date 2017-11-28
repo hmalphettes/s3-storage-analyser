@@ -376,3 +376,21 @@ def test_server_accept_textplain(monkeypatch):
     """Test whole server"""
     data = _test_server(monkeypatch, accept='text/plain', port=9009)
     assert 'hm.samples' in data
+
+@mock_cloudwatch
+@mock_s3
+def test_raw_s3(monkeypatch):
+    """Test using the s3 get_object_list_v2"""
+    _setup(monkeypatch)
+    stats = s3_storage_analyser.s3_analysis(conc=4)
+    #pprint(stats)
+
+@mock_cloudwatch
+@mock_s3
+def test_raw_s3(monkeypatch):
+    """Test using the s3 get_object_list_v2"""
+    _setup(monkeypatch)
+    bucket_stats = s3_storage_analyser.s3_bucket_stats()
+    s3_storage_analyser.update_s3_gauges(bucket_stats)
+    s3_storage_analyser.commit_s3_gauges()
+    #pprint(stats)

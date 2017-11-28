@@ -6,10 +6,11 @@ import argparse
 import os
 import re
 import json
+from pprint import pprint
 import multiprocessing as multi
 from fnmatch import fnmatchcase
 from operator import itemgetter
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, timezone
 import pytz
 import boto3
 import tabulate
@@ -23,6 +24,7 @@ def parse_args(args=None):
                         help='file size unit B|KB|MB|GB|TB', default='MB')
     parser.add_argument('--prefix', help='Only select buckets that match a glob. "s3://mybucke*"')
     parser.add_argument('--conc', type=int, help='Number of parallel workers')
+    parser.add_argument('--raws3', action='store_true', help='Long running S3 analysis')
     parser.add_argument(
         '--fmt', # type='string',
         choices=['json_pretty', 'json', 'tsv', 'csv', 'plain', 'simple', 'grid',
@@ -32,6 +34,7 @@ def parse_args(args=None):
     return parser.parse_args(args)
 
 STORAGE_TYPES = ['STANDARD', 'REDUCED_REDUNDANCY', 'GLACIER']
+STORAGE_TYPES_ABR = ['ST', 'RR', 'IA']
 UNIT_DEFS = {'B': 1, 'KB':1024, 'MB':1024**2, 'GB':1024**3, 'TB':1024**4}
 def convert_bytes(nbytes, unit='MB', append_unit=False):
     """Converts a number of bytes into a specific unit"""
@@ -54,11 +57,10 @@ def _conc_map(fct, iterable):
 
 """
 Prometheus Gauges:
-Objects:
-    _size_bytes
+    cloudwatch_s3_size_bytes
         *region  (cardinality: 16)
         *bucket  (cardinality: < 1000)
-    _files_total
+    cloudwatch_s3_objects_total
         *region  (cardinality: 16)
         *storage (cardinality: 3)
         *bucket  (cardinality: < 1000 ?)
@@ -286,14 +288,14 @@ def update_gauges(metrics_data):
             continue
         _set_object_gauge(f'cloudwatch_s3_size_bytes', value,
                           region=region, bucket=bucket, storage=st_abr)
-    commit_gauges()
+    commit_cloudwatch_gauges()
 
 def get_metrics_prom():
     """Return the path to the metrics.prom file"""
     return os.getenv('PROM_TEXT', default='metrics.prom')
 
-def commit_gauges():
-    """Either push the gauges to a gatway if PROM_GATEWAY is set
+def commit_cloudwatch_gauges():
+    """Either push the gauges to a gateway if PROM_GATEWAY is set
     or write them into a file if PROM_TEXT is set"""
     if 'PROM_GATEWAY' in os.environ:
         push_to_gateway(os.environ['PROM_GATEWAY'], job='s3analyser', registry=REGISTRY[0])
@@ -431,9 +433,137 @@ def analyse(prefix=None, unit='MB', conc=None, fmt='plain'):
     tabulated = tabulate.tabulate(rows, headers=headers, tablefmt=fmt)
     return tabulated
 
+# ------------ S3 API long running job
+def traverse_bucket(bucket, max_keys=None): # prefix=None,
+    """Paginates through the objects in the bucket
+    keep track of the number of files; sum the size of each file"""
+    total_bytes = 0
+    total_files = 0
+    last_modified = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    storage_type_stats = {}
+    for _type in STORAGE_TYPES:
+        storage_type_stats[_type] = {
+            'TotalSize': 0,
+            'TotalFiles': 0,
+            'LastModified': datetime(1970, 1, 1, tzinfo=timezone.utc)
+        }
+    # prefix = _extract_prefix_arg(prefix)
+    kwargs = {'Bucket': bucket['Name']}
+    # if prefix is not None:
+    #     kwargs['Prefix'] = prefix
+    if max_keys is not None:
+        kwargs['MaxKeys'] = max_keys
+    for obj in _list_objects(**kwargs):
+        if obj['Size'] != 0:
+            total_bytes += obj['Size']
+            total_files += 1
+            ts = obj['LastModified']
+            if ts > last_modified:
+                last_modified = ts
+            stats = storage_type_stats[obj['StorageClass']]
+            stats['TotalSize'] += obj['Size']
+            stats['TotalFiles'] += 1
+            if ts > stats['LastModified']:
+                stats['LastModified'] = ts
+    bucket.update({
+        'TotalSize': total_bytes,
+        'TotalFiles': total_files,
+        'LastModified': last_modified,
+        'StorageStats': storage_type_stats
+    })
+    return bucket
+
+def _list_objects(**kwargs):
+    """Generator to iterate the objects found in a bucket.
+    yield one object at a time
+    bucket, prefix=None, max_keys=1000, Marker=None"""
+    objects = boto3.client('s3').list_objects_v2(**kwargs)
+    contents = objects['Contents']
+    for content in contents:
+        yield content
+
+    if objects['IsTruncated'] is True:
+        if 'ContinuationToken' in objects:
+            kwargs['ContinuationToken'] = objects['NextContinuationToken']
+        else:
+            kwargs['StartAfter'] = contents[-1]['Key']
+        for i in _list_objects(**kwargs):
+            yield i
+
+def commit_s3_gauges():
+    """Either push the gauges to a gateway if PROM_GATEWAY is set
+    or write them into a file if PROM_TEXT is set"""
+    if 'PROM_GATEWAY' in os.environ:
+        push_to_gateway(os.environ['PROM_GATEWAY'], job='s3rawanalyser', registry=REGISTRY[0])
+        return
+    write_to_textfile('s3-' + get_metrics_prom(), REGISTRY[0])
+
+def _set_s3_object_gauge(name, value, **kwargs):
+    """Set the value of a gauge; be careful to only do this from a single
+    thread and to push to gateway before the thread is over"""
+    if REGISTRY[0] is None:
+        REGISTRY[0] = CollectorRegistry()
+    if name not in OBJECT_GAUGES:
+        OBJECT_GAUGES[name] = Gauge(
+            name, 'Number of buckets',
+            ['region', 'storage', 'bucket'], registry=REGISTRY[0])
+    OBJECT_GAUGES[name].labels(**kwargs).set(value)
+
+def update_s3_gauges(bucket_stats):
+    """
+    Set the values of the s3 gauges
+
+    Ideally this could be done by the workers but
+    prometheus seems clumsy with regard to sub-processes.
+    """
+
+    """
+    {'CreationDate': datetime.datetime(2006, 2, 3, 16, 45, 9, tzinfo=tzutc()),
+    'LastModified': datetime.datetime(2017, 11, 28, 10, 12, 9, 239000, tzinfo=tzutc()),
+    'Name': 'hm.samples',
+    'Region': 'us-east-1',
+    'StorageStats': {'GLACIER': {'TotalFiles': 0, 'TotalSize': 0},
+                    'REDUCED_REDUNDANCY': {'TotalFiles': 0, 'TotalSize': 0},
+                    'STANDARD': {'TotalFiles': 4, 'TotalSize': 24}},
+    'TotalFiles': 4,
+    'TotalSize': 24}
+    """
+    for stat in bucket_stats:
+        # _set_s3_object_gauge() cloudwatch_s3_size_bytes cloudwatch_s3_objects_total
+        storage_stats = stat['StorageStats']
+        for index, _type in enumerate(STORAGE_TYPES):
+            abr = STORAGE_TYPES_ABR[index]
+            _set_s3_object_gauge(
+                's3_size_bytes', storage_stats[_type]['TotalSize'],
+                region=stat['Region'], bucket=stat['Name'], storage=abr)
+            _set_s3_object_gauge(
+                's3_files_total', storage_stats[_type]['TotalFiles'],
+                region=stat['Region'], bucket=stat['Name'], storage=abr)
+            _set_s3_object_gauge(
+                's3_last_modified', storage_stats[_type]['LastModified'].timestamp(),
+                region=stat['Region'], bucket=stat['Name'], storage=abr)
+
+def s3_bucket_stats(prefix=None, conc=None):
+    if conc is not None:
+        _POOL_SIZE[0] = conc
+    buckets = list_buckets(prefix=prefix)
+    return list(_conc_map(traverse_bucket, buckets))
+
+def s3_analysis(conc=None):
+    """
+    Long running job where more information is collected.
+
+    Use S3 get_object_list_v2 to get a list of the objects
+    """
+    bucket_stats = s3_bucket_stats()
+    update_s3_gauges(bucket_stats)
+    commit_s3_gauges()
+
 def main():
     """CLI entry point"""
     args = parse_args()
+    if args.raws3:
+        return s3_analysis(conc=args.conc)
     analysis = analyse(
         prefix=args.prefix,
         unit=args.unit,

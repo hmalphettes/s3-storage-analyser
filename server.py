@@ -6,7 +6,8 @@ from urllib.parse import urlparse
 import threading
 import os
 
-from s3_storage_analyser import analyse, parse_args, stop_pool, get_metrics_prom
+from s3_storage_analyser import (
+    analyse, parse_args, stop_pool, get_metrics_prom, s3_analysis)
 
 # Run a single analysis at a time
 LOCK_ANALYSIS = threading.Lock()
@@ -24,8 +25,13 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        metrics_prom = None
         if self.path.startswith('/metrics'):
             metrics_prom = get_metrics_prom()
+        elif self.path.startswith('/s3-metrics'):
+            metrics_prom = 's3-'+get_metrics_prom()
+
+        if metrics_prom is not None:
             self.send_response(200)
             self.send_header('Content-type','text/plain')
             self.end_headers()
