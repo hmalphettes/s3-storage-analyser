@@ -382,15 +382,22 @@ def test_server_accept_textplain(monkeypatch):
 def test_raw_s3(monkeypatch):
     """Test using the s3 get_object_list_v2"""
     _setup(monkeypatch)
-    stats = s3_storage_analyser.s3_analysis(conc=4)
+    stats = s3_storage_analyser.s3_analysis(conc=1)
     #pprint(stats)
 
 @mock_cloudwatch
 @mock_s3
-def test_raw_s3(monkeypatch):
+def test_raw_s3_default_conc(monkeypatch):
     """Test using the s3 get_object_list_v2"""
     _setup(monkeypatch)
     bucket_stats = s3_storage_analyser.s3_bucket_stats()
     s3_storage_analyser.update_s3_gauges(bucket_stats)
     s3_storage_analyser.commit_s3_gauges()
     #pprint(stats)
+
+@mock_cloudwatch
+@mock_s3
+def test_main_raws3(monkeypatch):
+    """Test main raws3"""
+    _setup(monkeypatch)
+    _call_main('s3_storage_analyser.py --raws3')

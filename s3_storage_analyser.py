@@ -292,7 +292,7 @@ def update_gauges(metrics_data):
 
 def get_metrics_prom(s3=False):
     """Return the path to the metrics.prom file"""
-    return os.getenv('PROM_TEXT' if s3 else 'S3_PROM_TEXT', default='s3-metrics.prom')
+    return os.getenv('S3_PROM_TEXT' if s3 else 'PROM_TEXT', default='s3-metrics.prom')
 
 def commit_cloudwatch_gauges():
     """Either push the gauges to a gateway if PROM_GATEWAY is set
