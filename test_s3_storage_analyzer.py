@@ -263,8 +263,9 @@ def test_main_wrong_prefix(monkeypatch):
 def _test_server(monkeypatch, accept=None, method='GET', full_path=None,
                  query_string=None, port=None, status_code=200):
     _setup(monkeypatch)
-    if os.path.exists(get_metrics_prom()):
-        os.remove(get_metrics_prom())
+    for i in [True, False]:
+        if os.path.exists(get_metrics_prom(s3=i)):
+            os.remove(get_metrics_prom(s3=i))
     if port is not None:
         os.environ['S3ANALYSER_PORT'] = port.__str__()
     else:
@@ -382,8 +383,7 @@ def test_server_accept_textplain(monkeypatch):
 def test_raw_s3(monkeypatch):
     """Test using the s3 get_object_list_v2"""
     _setup(monkeypatch)
-    stats = s3_storage_analyser.s3_analysis(conc=1)
-    #pprint(stats)
+    s3_storage_analyser.s3_analysis(conc=1)
 
 @mock_cloudwatch
 @mock_s3
