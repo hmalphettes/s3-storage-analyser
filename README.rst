@@ -8,6 +8,7 @@
 S3 Storage Analyser
 ===================
 A command line tool to display the objects stored in your AWS S3 account.
+
 Exposes the metrics extracted for Prometheus under the `/metrics` endpoint.
 
 Strategy: Use Cloudwatch metrics
@@ -25,6 +26,9 @@ Strategy: Use Cloudwatch metrics
 As a starting point this implementation uses the Cloudwatch metrics.
 
 Prior art: https://www.opsdash.com/blog/aws-s3-cloudwatch-monitoring.html
+
+Work In Progress: Use S3 API get_objects_list_v2 as a long running batch.
+Store the numbers as Prometheus metrics for analysis.
 
 Development
 -----------
@@ -76,7 +80,8 @@ Note: if the machine where Docker is running is not configured with an appropria
 
 Usage - REST
 ------------
-The docker container is deployed on 'http://s3analyser.huguesm.name'
+The docker container is deployed on 'https://s3analyser.huguesm.name'
+
 Please do request the token parameter to access the API.
 
 ::
@@ -128,6 +133,23 @@ A Prometheus server can scrape them to store them in its timeseries database:
 
 .. image:: https://github.com/hmalphettes/s3-storage-analyser/raw/master/prometheus-s3-analyser.jpg
 
+
+Datamodel: 2 gauges with labels
+
+```
+Prometheus Gauges:
+    cloudwatch_s3_size_bytes
+        *region  (cardinality: 16)
+        *bucket  (cardinality: < 1000)
+    cloudwatch_s3_objects_total
+        *region  (cardinality: 16)
+        *storage (cardinality: 3)
+        *bucket  (cardinality: < 1000 ?)
+number of timeseries < 16*3*1000 + 16*1000 = 64k
+```
+
+Cloudflare reports up to 4.8M timeseries per server:
+https://www.infoq.com/news/2017/10/monitoring-cloudflare-prometheus
 
 Continuous Integration - Continuous Delivery
 --------------------------------------------
