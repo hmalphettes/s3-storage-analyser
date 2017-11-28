@@ -7,7 +7,7 @@ import threading
 import os
 
 from s3_storage_analyser import (
-    analyse, parse_args, stop_pool, get_metrics_prom, s3_analysis)
+    analyse, parse_args, stop_pool, get_metrics_prom)
 
 # Run a single analysis at a time
 LOCK_ANALYSIS = threading.Lock()
@@ -33,7 +33,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         if metrics_prom is not None:
             self.send_response(200)
-            self.send_header('Content-type','text/plain')
+            self.send_header('Content-type', 'text/plain')
             self.end_headers()
             if os.path.exists(metrics_prom):
                 file = open(metrics_prom, 'rb')

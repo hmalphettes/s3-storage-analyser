@@ -331,7 +331,9 @@ def test_server_favicon(monkeypatch):
 def test_server_json(monkeypatch):
     """Test whole server"""
     os.environ['PROM_TEXT'] = 'test.prom'
-    data = _test_server(monkeypatch, query_string='fmt=json&unit=TB&conc=4&prefix=hm.samples', port=9003)
+    data = _test_server(
+        monkeypatch,
+        query_string='fmt=json&unit=TB&conc=4&prefix=hm.samples', port=9003)
     print(data)
     assert data.startswith('{"Buckets":[{"Bucket":"hm.samples"')
     del os.environ['PROM_TEXT']
