@@ -136,6 +136,13 @@ A Prometheus server can scrape them to store them in its timeseries database:
 
 .. image:: https://github.com/hmalphettes/s3-storage-analyser/raw/master/prometheus-s3-analyser.jpg
 
+Example queries:
+
+    ::
+    # File sizes by region (MB) 1 day ago
+    sum(s3_size_bytes offset 1d) by (region) / 1024 / 1024
+    # Number of files by region and storage (MB)
+    sum(s3_files_total) by (region,storage) / 1024 / 1024
 
 Datamodel: 2 gauges with labels
 
