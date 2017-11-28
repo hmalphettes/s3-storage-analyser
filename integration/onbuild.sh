@@ -1,11 +1,12 @@
 #!/bin/bash
 
+__THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # Send notifications to a slack channel
 notify() {
   if [ -z "$SLACK_URL" ]; then
-    local d; d="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     set -a;
-    . "$d/.env"
+    . "$__THIS_DIR/.env"
+    set +a;
   fi
   [ -z "$SLACK_URL" ] && echo "ERROR: the SLACK_URL env var is missing. Notifications disabled" && return
   local msg; msg="$(jq -n -c -M --arg var "${1:?}" '$var')"
@@ -39,12 +40,27 @@ $cmd_integ_test
 $res2
 $codeblock
 "
-      if [ "$2" = "latest" ]; then
-        docker rm --force s3analyser_endpoint
-        docker run --name s3analyser_endpoint -e TOKEN="$TOKEN" \
-          --tmpfs /tmp -e PROM_TEXT=/tmp/metrics.prom \
-          --net host -d hmalphettes/s3-storage-analyser server --restart=on-failure
+    if [ "$2" = "latest" ]; then
+      # All tests are green. Reload the currently installed s3analyser service
+      # and regenrate the metrics
+      $__THIS_DIR/start_s3analyser_endpoint.sh
+      # Fast:
+      docker exec s3analyser_endpoint python3 -m s3_storage_analyser --conc 8
+      # Slow:
+      notify "Starting a full S3 analysis"
+      cmd_s3_full="docker exec s3analyser_endpoint python3 -m s3_storage_analyser --raws3 --conc 8"
+      if res3=$($cmd_s3_full 2>&1); then
+        notify "Completed the full S3 analysis"
+      else
+        notify "Failed the full S3 analysis:
+$codeblock
+$cmd_s3_full
+$res3
+$codeblock
+"
       fi
+
+    fi
     else
       notify "Integration test failed. Please ssh in the server and run \"journalctl -xfeu dockerhub_wh\":
 $codeblock
