@@ -212,13 +212,16 @@ def _make_req(metric, unit, regions_bybucket):
 
 def _run_requests(reqs, buckets):
     """Exectutes the requests"""
-    data = list(_conc_map(get_metric, reqs))
+    data = list(filter(None, _conc_map(get_metric, reqs)))
     _add_bucket_info(data, buckets)
     return data
 
 def get_metric(req):
     """Fetch the data for a metric"""
     resp = _get_metric_statistics(**req)
+    if len(resp['Datapoints']) == 0:
+        # Empty bucket or bucket that contains folders only
+        return None
     average = resp['Datapoints'][0]['Average']
     for dimension in req['Dimensions']:
         if dimension['Name'] == 'BucketName':
