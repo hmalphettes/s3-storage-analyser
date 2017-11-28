@@ -11,8 +11,8 @@ A command line tool to display the objects stored in your AWS S3 account.
 
 Exposes the metrics extracted for Prometheus under the `/metrics` endpoint.
 
-Strategy: Use Cloudwatch metrics
-================================
+Strategy: Cloudwatch metrics and S3 API
+=======================================
 +-------------------------------------------------+-------------------------------------------------+-------------------------------------------------------+
 | Strategy                                        | Performance                                     | Drawbacks                                             |
 +=================================================+=================================================+=======================================================+
@@ -123,6 +123,9 @@ Via docker:
 ::
 
     docker run -e TOKEN=secret --name s3analyser_endpoint --net host -d hmalphettes/s3-storage-analyser server
+    # Cloudwatch report and (long running) s3 analysis:
+    docker exec s3analyser_endpoint python3 -m s3_storage_analyser --conc 8
+    docker exec s3analyser_endpoint python3 -m s3_storage_analyser --raws3 --conc 8
 
 Usage Prometheus
 ----------------
@@ -137,7 +140,7 @@ A Prometheus server can scrape them to store them in its timeseries database:
 Datamodel: 2 gauges with labels
 
 ```
-Prometheus Gauges:
+#Prometheus Cloudwatch Gauges:
     cloudwatch_s3_size_bytes
         *region  (cardinality: 16)
         *bucket  (cardinality: < 1000)
@@ -145,7 +148,13 @@ Prometheus Gauges:
         *region  (cardinality: 16)
         *storage (cardinality: 3)
         *bucket  (cardinality: < 1000 ?)
-number of timeseries < 16*3*1000 + 16*1000 = 64k
+number of timeseries for cloudwatch < 16*3*1000 + 16*1000 = 64k
+#Prometheus S3 Gauges:
+    s3_{size_bytes|objects_total|last_modified},
+        *region  (cardinality: 16)
+        *storage (cardinality: 3)
+        *bucket  (cardinality: < 1000)
+number of timeseries for s3 < 3*(16*3*1000) = 432k
 ```
 
 Cloudflare reports up to 4.8M timeseries per server:
