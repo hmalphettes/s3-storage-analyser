@@ -138,7 +138,8 @@ A Prometheus server can scrape them to store them in its timeseries database:
 
 Example queries:
 
-    ::
+::
+
     # File sizes by region (MB) 1 day ago
     sum(s3_size_bytes offset 1d) by (region) / 1024 / 1024
     # Number of files by region and storage (MB)
@@ -146,23 +147,23 @@ Example queries:
 
 Datamodel: 2 gauges with labels
 
-```
-#Prometheus Cloudwatch Gauges:
-    cloudwatch_s3_size_bytes
-        *region  (cardinality: 16)
-        *bucket  (cardinality: < 1000)
-    cloudwatch_s3_objects_total
-        *region  (cardinality: 16)
-        *storage (cardinality: 3)
-        *bucket  (cardinality: < 1000 ?)
-number of timeseries for cloudwatch < 16*3*1000 + 16*1000 = 64k
-#Prometheus S3 Gauges:
-    s3_{size_bytes|objects_total|last_modified},
-        *region  (cardinality: 16)
-        *storage (cardinality: 3)
-        *bucket  (cardinality: < 1000)
-number of timeseries for s3 < 3*(16*3*1000) = 432k
-```
+::
+
+    #Prometheus Cloudwatch Gauges:
+        cloudwatch_s3_size_bytes
+            *region  (cardinality: 16)
+            *bucket  (cardinality: < 1000)
+        cloudwatch_s3_objects_total
+            *region  (cardinality: 16)
+            *storage (cardinality: 3)
+            *bucket  (cardinality: < 1000 ?)
+    number of timeseries for cloudwatch < 16*3*1000 + 16*1000 = 64k
+    #Prometheus S3 Gauges:
+        s3_{size_bytes|objects_total|last_modified},
+            *region  (cardinality: 16)
+            *storage (cardinality: 3)
+            *bucket  (cardinality: < 1000)
+    number of timeseries for s3 < 3*(16*3*1000) = 432k
 
 Cloudflare reports up to 4.8M timeseries per server:
 https://www.infoq.com/news/2017/10/monitoring-cloudflare-prometheus
