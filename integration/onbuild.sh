@@ -19,6 +19,7 @@ if [ "$1" = "test" ]; then
     echo "Hello $2"
 elif [ -n "$2" ]; then
     set -e
+    notify "New hmalphettes/s3-storage-analyser:$2 built. Starting the Continuous Deployment."
     # Hardcode the repository because this service is opened to the world
     # and we certainly dont want to let any image have a run on our server.
     pull_stdout=$(docker pull "hmalphettes/s3-storage-analyser:$2")
