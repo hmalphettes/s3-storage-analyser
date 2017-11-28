@@ -290,9 +290,9 @@ def update_gauges(metrics_data):
                           region=region, bucket=bucket, storage=st_abr)
     commit_cloudwatch_gauges()
 
-def get_metrics_prom():
+def get_metrics_prom(s3=False):
     """Return the path to the metrics.prom file"""
-    return os.getenv('PROM_TEXT', default='metrics.prom')
+    return os.getenv('PROM_TEXT' if s3 else 'S3_PROM_TEXT', default='s3-metrics.prom')
 
 def commit_cloudwatch_gauges():
     """Either push the gauges to a gateway if PROM_GATEWAY is set
@@ -496,7 +496,7 @@ def commit_s3_gauges():
     if 'PROM_GATEWAY' in os.environ:
         push_to_gateway(os.environ['PROM_GATEWAY'], job='s3rawanalyser', registry=REGISTRY[0])
         return
-    write_to_textfile('s3-' + get_metrics_prom(), REGISTRY[0])
+    write_to_textfile(get_metrics_prom(s3=True), REGISTRY[0])
 
 def _set_s3_object_gauge(name, value, **kwargs):
     """Set the value of a gauge; be careful to only do this from a single

@@ -27,9 +27,9 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         metrics_prom = None
         if self.path.startswith('/metrics'):
-            metrics_prom = get_metrics_prom()
+            metrics_prom = get_metrics_prom(s3=False)
         elif self.path.startswith('/s3-metrics'):
-            metrics_prom = 's3-'+get_metrics_prom()
+            metrics_prom = get_metrics_prom(s3=True)
 
         if metrics_prom is not None:
             self.send_response(200)
